@@ -1,0 +1,374 @@
+# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
+
+# Lecture 3: Tidymodels & Modeltime ---------------------------------------
+# Marco Zanotti
+
+# Goals:
+# - Learn the Modeltime Workflow
+# - Understand Accuracy Measurements
+# - Understand the Forecast Horizon & Confidence Intervals
+# - Understand refitting
+
+# Challenges:
+# - Challenge (Optional) - Modeltime
+
+
+
+# Packages ----------------------------------------------------------------
+
+source("R/utils.R")
+source("R/packages.R")
+
+
+
+# Data & Artifacts --------------------------------------------------------
+
+artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+data_prep_tbl <- artifacts_list$data$data_prep_tbl
+forecast_tbl <- artifacts_list$data$forecast_tbl
+
+
+# * Train / Test Sets -----------------------------------------------------
+
+splits <- data_prep_tbl |>
+  time_series_split(assess = "8 weeks", cumulative = TRUE)
+
+splits |>
+  tk_time_series_cv_plan() |>
+  plot_time_series_cv_plan(optin_time, optins_trans)
+
+training(splits)
+testing(splits)
+
+
+# * Recipes ---------------------------------------------------------------
+
+rcp_spec_lag <- artifacts_list$recipes$rcp_spec_lag
+rcp_spec_lag |> prep() |> juice() |> glimpse()
+
+
+
+# Tidymodels --------------------------------------------------------------
+
+# https://www.tidymodels.org/
+# https://www.tidymodels.org/find/parsnip/
+
+
+
+# Modeltime ---------------------------------------------------------------
+
+# https://business-science.github.io/modeltime/index.html
+# https://github.com/business-science/modeltime/issues/5
+
+
+# * Engines (Algorithms' Specification) -----------------------------------
+
+# - parsnip algorithms
+# - modeltime algorithms
+# - set_engine()
+# - Models must be fit (trained)
+
+# ARIMA
+model_fit_arima <- arima_reg() |>
+  set_engine("auto_arima") |>
+  fit(optins_trans ~ optin_time, data = training(splits))
+
+# ARIMAX
+model_spec_arima <- arima_reg() |>
+  set_engine("auto_arima")
+rcp_spec_fourier <- recipe(optins_trans ~ optin_time, data = training(splits)) |>
+  step_fourier(optin_time, period = c(7, 14, 30, 90), K = 1)
+
+# GLMNET
+model_spec_glmnet <- linear_reg(penalty = 0.1, mixture = 0.5) |>
+  set_engine("glmnet")
+
+# XGBOOST
+model_spec_xgb <- boost_tree(
+  mode = "regression",
+  mtry = 25,
+  trees = 1000,
+  min_n = 2,
+  tree_depth = 12,
+  learn_rate = 0.3,
+  loss_reduction = 0
+) |>
+  set_engine("xgboost")
+
+
+# * Workflows (Fitting / Training) ----------------------------------------
+
+# - workflow()
+# - add_recipe()
+# - add_model()
+# - Models must be fit (trained)
+
+# ARIMAX
+wrkfl_fit_arima <- workflow() |>
+  add_recipe(rcp_spec_fourier) |>
+  add_model(model_spec_arima) |>
+  fit(training(splits))
+
+# GLMNET
+wrkfl_fit_glmnet <- workflow() |>
+  add_recipe(rcp_spec_lag) |>
+  add_model(model_spec_glmnet) |>
+  fit(training(splits))
+
+# XGBOOST
+wrkfl_fit_xgb <- workflow() |>
+  add_recipe(rcp_spec_lag) |>
+  add_model(model_spec_xgb) |>
+  fit(training(splits))
+
+
+# * Calibration -----------------------------------------------------------
+
+# - modeltime_table()
+# - modeltime_calibrate()
+# - Calculates residual model errors on test set
+# - Gives us a true prediction error estimate when we model with confidence intervals
+
+model_tbl <- modeltime_table(
+  model_fit_arima,
+  wrkfl_fit_arima,
+  wrkfl_fit_glmnet,
+  wrkfl_fit_xgb
+) |>
+  update_model_description(3, "GLMNET - Lag Recipe")
+model_tbl
+
+calibration_tbl <- model_tbl |>
+  modeltime_calibrate(new_data = testing(splits))
+
+calibration_tbl |>
+  dplyr::slice(1) |>
+  unnest(.calibration_data)
+
+
+# * Evaluation ------------------------------------------------------------
+
+# - modeltime_accuracy()
+# - modeltime_forecast()
+# - Calculates common accuracy measures (MAE, MAPE, MASE, RMSE, R-SQUARED)
+# - Visualize the out-of-sample forecast
+
+# Out-of-Sample
+calibration_tbl |>
+  modeltime_accuracy() |>
+  table_modeltime_accuracy(.interactive = TRUE, bordered = TRUE, resizable = TRUE)
+
+# In-Sample
+calibration_tbl |>
+  modeltime_accuracy(new_data = training(splits) |> drop_na()) |>
+  table_modeltime_accuracy(.interactive = TRUE, bordered = TRUE, resizable = TRUE)
+
+calibration_tbl |>
+  modeltime_forecast(
+    new_data = testing(splits),
+    actual_data = data_prep_tbl,
+    conf_interval = .8
+  ) |>
+  plot_modeltime_forecast(
+    .conf_interval_show = TRUE,
+    .conf_interval_alpha = .5,
+    .conf_interval_fill = "lightblue",
+    .title = "Subscriber Forecast"
+  )
+
+
+# * Refitting -------------------------------------------------------------
+
+refit_tbl <- calibration_tbl |>
+  modeltime_refit(data = data_prep_tbl)
+
+
+# * Forecasting -----------------------------------------------------------
+
+refit_tbl |>
+  modeltime_forecast(
+    new_data = forecast_tbl,
+    actual_data = data_prep_tbl,
+    conf_interval = .8
+  ) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+
+
+
+# Extra Topics ------------------------------------------------------------
+
+# * Residuals' Diagnostics ------------------------------------------------
+
+# - Explore in-sample and out-of-sample residuals
+
+residuals_out_tbl <- calibration_tbl |>
+  modeltime_residuals()
+residuals_in_tbl <- calibration_tbl |>
+  modeltime_residuals(training(splits) |> drop_na())
+
+# Time Plot
+residuals_out_tbl |>
+  plot_modeltime_residuals(.y_intercept = 0, .y_intercept_color = "blue")
+residuals_in_tbl |>
+  plot_modeltime_residuals()
+
+# ACF Plot
+residuals_out_tbl |>
+  plot_modeltime_residuals(.type = "acf")
+residuals_in_tbl |>
+  plot_modeltime_residuals(.type = "acf")
+
+# Seasonality
+residuals_out_tbl |>
+  plot_modeltime_residuals(.type = "seasonality")
+residuals_in_tbl |>
+  plot_modeltime_residuals(.type = "seasonality")
+
+
+# * Expedited Forecasting -------------------------------------------------
+
+# - Fitted on Full dataset (No Train/Test)
+# - Forecast directly without confidence intervals
+
+model_fit_arima <- arima_reg() |>
+  set_engine("auto_arima") |>
+  fit(optins_trans ~ optin_time, data = data_prep_tbl)
+
+model_spec_glmnet <- linear_reg(penalty = 0.1, mixture = 0.5) |>
+  set_engine("glmnet")
+wrkfl_fit_glmnet <- workflow() |>
+  add_model(model_spec_glmnet) |>
+  add_recipe(rcp_spec_lag) |>
+  fit(data_prep_tbl)
+
+model_tbl <- modeltime_table(
+  model_fit_arima,
+  wrkfl_fit_glmnet
+)
+
+model_tbl |>
+  modeltime_forecast(
+    new_data = forecast_tbl,
+    actual_data = data_prep_tbl
+  ) |>
+  plot_modeltime_forecast()
+
+
+# * Back Transformation ---------------------------------------------------
+
+artifacts_list
+std_mean <- artifacts_list$standardize$std_mean
+std_sd <- artifacts_list$standardize$std_sd
+limit_lower <- artifacts_list$log_interval$limit_lower
+limit_upper <- artifacts_list$log_interval$limit_upper
+offset <- artifacts_list$log_interval$offset
+
+# convert back to original scale
+back_calibration_tbl <- calibration_tbl
+for (i in 1:nrow(calibration_tbl)) {
+  back_calibration_tbl$.calibration_data[[i]] <- calibration_tbl$.calibration_data[[i]] |>
+    mutate(
+      across(
+        .actual:.prediction,
+        .fns = ~ std_logint_inv_vec(
+          x = .,
+          mean = std_mean, sd = std_sd,
+          limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
+        )
+      )
+    ) |>
+    mutate(.residuals = .actual - .prediction)
+}
+
+back_calibration_tbl |>
+  modeltime_accuracy() |>
+  table_modeltime_accuracy(.interactive = TRUE, bordered = TRUE, resizable = TRUE)
+
+calibration_tbl |>
+  modeltime_forecast(new_data = testing(splits), actual_data = data_prep_tbl) |>
+  mutate(
+    across(
+      .value:.conf_hi,
+      .fns = ~ std_logint_inv_vec(
+        x = .,
+        mean = std_mean, sd = std_sd,
+        limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
+      )
+    )
+  ) |>
+  plot_modeltime_forecast()
+
+# refitting
+refit_tbl <- calibration_tbl |>
+  modeltime_refit(data = data_prep_tbl)
+
+# out-of-sample forecast
+refit_tbl |>
+  modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
+  mutate(
+    across(
+      .value:.conf_hi,
+      .fns = ~ std_logint_inv_vec(
+        x = .,
+        mean = std_mean, sd = std_sd,
+        limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
+      )
+    )
+  ) |>
+  plot_modeltime_forecast()
+
+
+# * Conformal Intervals ---------------------------------------------------
+
+# https://business-science.github.io/modeltime/articles/modeltime-conformal-prediction.html
+
+# With the calibration table in hand, we can implement the conformal prediction
+# interval. Currently, there are 2 methods implemented in modeltime_forecast:
+# - conformal_default: Uses qnorm() to compute quantiles from out-of-sample (test set)
+# residuals (so non-conformal).
+# - conformal_split: Uses the split method split conformal inference method described
+# by Lei et al (2018)
+
+calibration_tbl <- modeltime_table(
+  model_fit_arima,
+  wrkfl_fit_arima,
+  wrkfl_fit_glmnet,
+  wrkfl_fit_xgb
+) |>
+  update_model_description(3, "GLMNET - Lag Recipe") |>
+  modeltime_calibrate(new_data = testing(splits))
+
+nonconf_tbl <- calibration_tbl |>
+  modeltime_forecast(
+    new_data = testing(splits),
+    actual_data = data_prep_tbl,
+    conf_interval = 0.95,
+    conf_method = "conformal_default", # default non-conformal method
+    keep_data = TRUE
+  )
+nonconf_tbl |>
+  plot_modeltime_forecast(
+    .title = "Non-Conformal Intervals",
+    .facet_ncol = 1, .facet_vars = .model_desc
+  )
+
+conf_tbl <- calibration_tbl |>
+  modeltime_forecast(
+    new_data = testing(splits),
+    actual_data = data_prep_tbl,
+    conf_interval = 0.95,
+    conf_method = "conformal_split", # conformal method
+    keep_data = TRUE
+  )
+conf_tbl |>
+  plot_modeltime_forecast(
+    .title = "Conformal Intervals",
+    .facet_ncol = 1, .facet_vars = .model_desc
+  )
+
+res_confint_tbl <- nonconf_tbl |>
+  select(.model_id:.conf_hi) |>
+  rename("nonconf_lo" = ".conf_lo", "nonconf_hi" = ".conf_hi") |>
+  bind_cols(conf_tbl |> select(.conf_lo:.conf_hi) |> set_names(c("conf_lo", "conf_hi")))
+tail(res_confint_tbl)
+
