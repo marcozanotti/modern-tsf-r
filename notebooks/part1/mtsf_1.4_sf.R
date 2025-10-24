@@ -1,10 +1,10 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 4: Time Series Algorithms ---------------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
 
+# Lecture 1.4: Time Series Algorithms ---------------------------------------
+
 # Goals:
-# - Global Baseline Models
+# - Baseline Models
 # - SARIMAX
 # - ETS
 # - TBATS
@@ -15,14 +15,14 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -33,14 +33,14 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
 
-rcp_spec_fourier <- recipe(optins_trans ~ optin_time + event, data = training(splits)) |>
-  step_fourier(optin_time, period = c(7, 14, 30, 90), K = 1)
-# Recipe with Fourier Terms and Events
+# Recipe with Fourier Terms and Promo
+rcp_spec_fourier <- recipe(y ~ ds + promo, data = training(splits)) |>
+  step_fourier(ds, period = c(7, 14, 30, 90), K = 1)
 
 
 
@@ -59,12 +59,12 @@ rcp_spec_fourier <- recipe(optins_trans ~ optin_time + event, data = training(sp
 # NAIVE
 model_fit_naive <- naive_reg() |>
   set_engine("naive") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # SNAIVE
 model_fit_snaive <- naive_reg() |>
   set_engine("snaive") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # WINDOW - MEAN
 model_fit_mean <- window_reg(
@@ -75,7 +75,7 @@ model_fit_mean <- window_reg(
     window_function = mean,
     na.rm = TRUE
   ) |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # WINDOW - WEIGHTED MEAN
 model_fit_wmean <- window_reg(
@@ -85,7 +85,7 @@ model_fit_wmean <- window_reg(
     "window_function",
     window_function = ~ sum(tail(.x, 3) * c(0.1, 0.3, 0.6))
   ) |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # WINDOW - MEDIAN
 model_fit_median <- window_reg(
@@ -96,7 +96,7 @@ model_fit_median <- window_reg(
     window_function = median,
     na.rm = TRUE
   ) |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 
 # * Calibration -----------------------------------------------------------
@@ -167,12 +167,12 @@ model_fit_arima <- arima_reg(
   seasonal_ma = 1
 ) |>
   set_engine("arima") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # Auto-SARIMA
 model_fit_auto_sarima <- arima_reg() |>
   set_engine("auto_arima") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # Auto-SARIMA with XREG
 model_spec_auto_sarima_xregs <- arima_reg() |>
@@ -218,26 +218,26 @@ model_fit_ets <- exp_smoothing(
   season = "additive"
 ) |>
   set_engine("ets") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # Auto-ETS
 model_fit_auto_ets <- exp_smoothing() |>
   set_engine("ets") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 model_fit_auto_smooth <- exp_smoothing() |>
   set_engine("smooth_es") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # ThetaF
 model_fit_theta <- exp_smoothing() |>
   set_engine("theta") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # CROSTON (method for intermittent demand forecasting)
 # model_fit_croston <- exp_smoothing() |>
 #   set_engine("croston") |>
-#   fit(optins_trans ~ optin_time, data = training(splits))
+#   fit(y ~ ds, data = training(splits))
 
 # Auto-ETS with XREG
 model_spec_auto_smooth_xreg <- exp_smoothing() |>
@@ -246,7 +246,7 @@ model_spec_auto_smooth_xreg <- exp_smoothing() |>
 # Auto-ADAM
 model_fit_auto_adam <- adam_reg() |>
   set_engine("auto_adam") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # Auto-ADAM with XREG
 model_spec_auto_adam_xreg <- adam_reg() |>
@@ -305,12 +305,12 @@ model_fit_tbats <- seasonal_reg(
   seasonal_period_3 = 365
 ) |>
   set_engine("tbats") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # Auto-TBATS
 model_fit_auto_tbats <- seasonal_reg() |>
   set_engine("tbats") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
@@ -345,7 +345,7 @@ model_fit_stlm_ets <- seasonal_reg(
   seasonal_period_3 = 364 / 2
 ) |>
   set_engine("stlm_ets") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # STLM with ARIMA
 model_fit_stlm_arima <- seasonal_reg(
@@ -354,7 +354,7 @@ model_fit_stlm_arima <- seasonal_reg(
   seasonal_period_3 = 364 / 2
 ) |>
   set_engine("stlm_arima") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # STLM with ARIMA + XREGS
 model_fit_stlm_arima_xregs <- seasonal_reg(
@@ -363,17 +363,17 @@ model_fit_stlm_arima_xregs <- seasonal_reg(
   seasonal_period_3 = 364 / 2
 ) |>
   set_engine("stlm_arima") |>
-  fit(optins_trans ~ optin_time + event, data = training(splits))
+  fit(y ~ ds + promo, data = training(splits))
 
 # Auto-STLM with ARIMA (simply STL with ARIMA on the ts frequency seasonality)
 model_fit_auto_stlm_arima <- seasonal_reg() |>
   set_engine("stlm_arima") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # Auto-STLM with ARIMA + XREGS
 model_fit_auto_stlm_arima_xregs <- seasonal_reg() |>
   set_engine("stlm_arima") |>
-  fit(optins_trans ~ optin_time + event, data = training(splits))
+  fit(y ~ ds + promo, data = training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
@@ -410,7 +410,7 @@ model_fit_prophet <- prophet_reg(
   seasonality_yearly = TRUE
 ) |>
   set_engine("prophet") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 prophet_model <- model_fit_prophet$fit$models$model_1
 prophet_fcst <- predict(
@@ -424,7 +424,7 @@ prophet_plot_components(prophet_model, prophet_fcst)
 # Auto-PROPHET
 model_fit_auto_prophet <- prophet_reg() |>
   set_engine("prophet") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 prophet_model <- model_fit_auto_prophet$fit$models$model_1
 prophet_fcst <- predict(
@@ -441,7 +441,7 @@ model_fit_prophet_xregs <- prophet_reg(
   seasonality_yearly = TRUE
 ) |>
   set_engine("prophet") |>
-  fit(optins_trans ~ optin_time + event, data = training(splits))
+  fit(y ~ ds + promo, data = training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
@@ -463,23 +463,24 @@ calibrate_evaluate_plot(
 
 # * Engines ---------------------------------------------------------------
 
+# FIXME: bug in Thief    
 # THIEF
-model_fit_thief <- temporal_hierarchy() |> # use_model = "arima"
-  set_engine("thief") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+# model_fit_thief <- temporal_hierarchy() |> # use_model = "arima"
+#   set_engine("thief") |>
+#   fit(y ~ ds, data = training(splits))
 
 # THIEF with NNFOR
-model_fit_thief_nnfor <- temporal_hierarchy() |>
-  set_engine("thief", forecastfunction = nnfor::elm.thief) |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+# model_fit_thief_nnfor <- temporal_hierarchy() |>
+#   set_engine("thief", forecastfunction = nnfor::elm.thief) |>
+#   fit(y ~ ds, data = training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
 
-calibrate_evaluate_plot(
-  model_fit_thief,
-  model_fit_thief_nnfor
-)
+# calibrate_evaluate_plot(
+#   model_fit_thief,
+#   model_fit_thief_nnfor
+# )
 
 
 
@@ -517,9 +518,9 @@ calibration_tbl <- modeltime_table(
   # PROPHET
   model_fit_prophet,
   model_fit_auto_prophet,
-  model_fit_prophet_xregs,
+  model_fit_prophet_xregs
   # THIEF
-  model_fit_thief
+  # model_fit_thief
 ) |>
   update_modeltime_description(.model_id = 3, .new_model_desc = "MEAN [7]") |>
   update_modeltime_description(.model_id = 4, .new_model_desc = "WMEAN [7]") |>
@@ -565,6 +566,5 @@ refit_tbl |>
 
 # * Save Artifacts --------------------------------------------------------
 
-calibration_tbl |>
-  write_rds("artifacts/calibration_ts.rds")
+calibration_tbl |> write_rds("data/email/artifacts/calibration_ts.rds")
 

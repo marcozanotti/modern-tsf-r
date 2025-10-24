@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 3: Tidymodels & Modeltime ---------------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 1.3: Tidymodels & Modeltime ---------------------------------------
 
 # Goals:
 # - Learn the Modeltime Workflow
@@ -16,14 +16,14 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -35,7 +35,7 @@ splits <- data_prep_tbl |>
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 training(splits)
 testing(splits)
@@ -71,13 +71,13 @@ rcp_spec_lag |> prep() |> juice() |> glimpse()
 # ARIMA
 model_fit_arima <- arima_reg() |>
   set_engine("auto_arima") |>
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # ARIMAX
 model_spec_arima <- arima_reg() |>
   set_engine("auto_arima")
-rcp_spec_fourier <- recipe(optins_trans ~ optin_time, data = training(splits)) |>
-  step_fourier(optin_time, period = c(7, 14, 30, 90), K = 1)
+rcp_spec_fourier <- recipe(y ~ ds, data = training(splits)) |>
+  step_fourier(ds, period = c(7, 14, 30, 90), K = 1)
 
 # GLMNET
 model_spec_glmnet <- linear_reg(penalty = 0.1, mixture = 0.5) |>
@@ -232,7 +232,7 @@ residuals_in_tbl |>
 
 model_fit_arima <- arima_reg() |>
   set_engine("auto_arima") |>
-  fit(optins_trans ~ optin_time, data = data_prep_tbl)
+  fit(y ~ ds, data = data_prep_tbl)
 
 model_spec_glmnet <- linear_reg(penalty = 0.1, mixture = 0.5) |>
   set_engine("glmnet")

@@ -1,4 +1,4 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
+# Modern Time Series Forecasting with R ----
 
 # Lecture 11: Panel Time Series Forecasting -------------------------------
 # Marco Zanotti
@@ -13,52 +13,47 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 # Data & Artifacts --------------------------------------------------------
 
-subscribers_tbl <- read_rds("data/subscribers.rds")
-events_tbl <- read_rds("data/events.rds")
+m4_tbl <- load_data("data/m4", "m4_prep_sample", ext = ".parquet")
+
 
 
 # Data Preparation --------------------------------------------------------
 
-subscribers_tbl |> count(member_rating)
 
-# subscribers data by group
-subscribers_daily_tbl <- subscribers_tbl |>
+
+# email data by group
+email_tbl <- email_tbl |>
   rename(id = member_rating) |>
   mutate(id = ifelse(id == 2, id, 1) |> as.factor()) |>
   group_by(id) |>
-  summarise_by_time(optin_time, .by = "day", optins = n()) |>
+  summarise_by_time(ds, .by = "day", y = n()) |>
   pad_by_time(.pad_value = 0)
 
-subscribers_daily_tbl |>
-  plot_time_series(optin_time, log1p(optins), .smooth = FALSE)
+email_tbl |>
+  plot_time_series(ds, log1p(y), .smooth = FALSE)
 
-subscribers_prep_tbl <- subscribers_daily_tbl |>
-  mutate(optins_trans = log_interval_vec(optins, limit_lower = 0, offset = 1)) |>
-  mutate(optins_trans = standardize_vec(optins_trans)) |>
+email_prep_tbl <- email_tbl |>
+  mutate(y = log_interval_vec(y, limit_lower = 0, offset = 1)) |>
+  mutate(y = standardize_vec(y)) |>
   filter_by_time(.start_date = "2018-07-05", .end_date = "2020-02-29") |>
-  mutate(optins_trans_cleaned = ts_clean_vec(optins_trans, period = 7)) |>
+  mutate(y_trans_cleaned = ts_clean_vec(y, period = 7)) |>
   mutate(
-    optins_trans = ifelse(
-      optin_time |> between_time("2018-11-18", "2018-11-20"),
-      optins_trans_cleaned,
-      optins_trans
+    y = ifelse(
+      ds |> between_time("2018-11-18", "2018-11-20"),
+      y_trans_cleaned,
+      y
     )
   ) |>
-  select(-optins, -optins_trans_cleaned)
+  select(-y, -y_trans_cleaned)
 
-subscribers_prep_tbl |>
-  plot_time_series(optin_time, optins_trans, .smooth = FALSE)
-
-# events data
-events_daily_tbl <- events_tbl |>
-  mutate(event_date = ymd_hms(event_date)) |>
-  summarise_by_time(event_date, .by = "day", event = n())
+email_prep_tbl |>
+  plot_time_series(ds, y, .smooth = FALSE)
 
 
 
@@ -73,36 +68,36 @@ horizon <- 7 * 8
 lag_period <- 7 * 8
 rolling_periods <- c(30, 60, 90)
 
-data_prep_full_tbl <- subscribers_prep_tbl |>
+data_prep_full_tbl <- email_prep_tbl |>
   # Extend each time series
-  # future_frame(.data = ., optin_time, .length_out = horizon, .bind_data = TRUE) |>
+  # future_frame(.data = ., ds, .length_out = horizon, .bind_data = TRUE) |>
   extend_timeseries(
     .id_var = id,
-    .date_var = optin_time,
+    .date_var = ds,
     .length_future = horizon
   ) |>
   group_by(id) |>
   # Add lags
-  tk_augment_lags(optins_trans, .lags = lag_period) |>
+  tk_augment_lags(y, .lags = lag_period) |>
   # Add rolling features
   tk_augment_slidify(
-    optins_trans_lag56,
+    y_trans_lag56,
     mean,
     .period = rolling_periods,
     .align = "center",
     .partial = TRUE
   ) |>
   # Add Events
-  left_join(events_daily_tbl, by = c("optin_time" = "event_date")) |>
-  mutate(event = ifelse(is.na(event), 0, event)) |>
+  left_join(events_daily_tbl, by = c("ds" = "event_date")) |>
+  mutate(promo = ifelse(is.na(promo), 0, promo)) |>
   # Reformat Columns
   rename_with(.cols = contains("lag"), .fn = ~ str_c("lag_", .)) |>
   ungroup()
 
 data_prep_full_tbl |>
   group_by(id) |>
-  pivot_longer(cols = -c(id, optin_time)) |>
-  plot_time_series(optin_time, value, name, .smooth = FALSE)
+  pivot_longer(cols = -c(id, ds)) |>
+  plot_time_series(ds, value, name, .smooth = FALSE)
 data_prep_full_tbl |> group_by(id) |> slice_tail(n = horizon + 1)
 
 
@@ -138,32 +133,32 @@ extract_nested_test_split(nested_data_tbl, .row_id = 1)
 # - Interaction: wday.lbl:week2
 # - Fourier Features
 rcp_spec <-
-  # recipe(optins_trans ~ ., data = training(splits)) |>
-  recipe(optins_trans ~ ., data = extract_nested_train_split(nested_data_tbl)) |>
+  # recipe(y ~ ., data = training(splits)) |>
+  recipe(y ~ ., data = extract_nested_train_split(nested_data_tbl)) |>
   # Time Series Signature
-  step_timeseries_signature(optin_time) |>
+  step_timeseries_signature(ds) |>
   step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
   step_normalize(matches("(index.num)|(year)|(yday)")) |>
   step_dummy(all_nominal(), one_hot = TRUE) |>
   # Interaction
   step_interact(~ matches("week2") * matches("wday.lbl")) |>
   # Fourier
-  step_fourier(optin_time, period = c(7, 14, 30, 90, 365), K = 2)
+  step_fourier(ds, period = c(7, 14, 30, 90, 365), K = 2)
 rcp_spec |> prep() |> juice() |> glimpse()
 
 # Spline Recipe
 # - natural spline series on index.num
 rcp_spec_spline <- rcp_spec |>
   step_ns(ends_with("index.num"), deg_free = 2) |>
-  step_rm(optin_time) |>
+  step_rm(ds) |>
   step_rm(starts_with("lag_"))
 rcp_spec_spline |> prep() |> juice() |> glimpse()
 
 # Lag Recipe
-# - lags of optins_trans and rolls
+# - lags of y and rolls
 rcp_spec_lag <- rcp_spec |>
   step_naomit(starts_with("lag_")) |>
-  step_rm(optin_time)
+  step_rm(ds)
 rcp_spec_lag |> prep() |> juice() |> glimpse()
 
 
@@ -483,23 +478,23 @@ nested_forecast_tbl |>
 
 # * Feature Engineering ---------------------------------------------------
 
-subscribers_prep_tbl |>
-  plot_time_series(optin_time, optins_trans, .smooth = FALSE)
+email_prep_tbl |>
+  plot_time_series(ds, y, .smooth = FALSE)
 
 horizon <- 7 * 8
 
-data_prep_full_tbl <- subscribers_prep_tbl |>
+data_prep_full_tbl <- email_prep_tbl |>
   group_by(id) |>
-  future_frame(.data = _, optin_time, .length_out = horizon, .bind_data = TRUE) |>
+  future_frame(.data = _, ds, .length_out = horizon, .bind_data = TRUE) |>
   # Add Events
-  left_join(events_daily_tbl, by = c("optin_time" = "event_date")) |>
-  mutate(event = ifelse(is.na(event), 0, event)) |>
+  left_join(events_daily_tbl, by = c("ds" = "event_date")) |>
+  mutate(promo = ifelse(is.na(promo), 0, promo)) |>
   ungroup()
 
 data_prep_full_tbl |>
   group_by(id) |>
-  pivot_longer(cols = -c(id, optin_time)) |>
-  plot_time_series(optin_time, value, name, .smooth = FALSE)
+  pivot_longer(cols = -c(id, ds)) |>
+  plot_time_series(ds, value, name, .smooth = FALSE)
 data_prep_full_tbl |> group_by(id) |> slice_tail(n = horizon + 1)
 
 
@@ -508,7 +503,7 @@ data_prep_full_tbl |> group_by(id) |> slice_tail(n = horizon + 1)
 data_prep_tbl <- data_prep_full_tbl |>
   drop_na()
 forecast_tbl <- data_prep_full_tbl |>
-  filter(is.na(optins_trans))
+  filter(is.na(y))
 
 
 # * Train / Test Sets -----------------------------------------------------
@@ -516,19 +511,19 @@ forecast_tbl <- data_prep_full_tbl |>
 splits <- time_series_split(data_prep_tbl, assess = horizon, cumulative = TRUE)
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
 
-rcp_spec <- recipe(optins_trans ~ ., data = training(splits)) |>
+rcp_spec <- recipe(y ~ ., data = training(splits)) |>
   update_role(id, new_role = "id") |>
   step_mutate_at(id, fn = droplevels) |>
-  step_timeseries_signature(optin_time) |>
+  step_timeseries_signature(ds) |>
   step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
   step_normalize(matches("(index.num)|(year)|(yday)")) |>
   step_dummy(all_nominal(), one_hot = TRUE) |>
-  step_rm(optin_time)
+  step_rm(ds)
 rcp_spec |> prep() |> juice() |> glimpse()
 
 

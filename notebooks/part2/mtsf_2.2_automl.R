@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 8: Automatic Machine Learning Algorithms ------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 2.2: Automatic Machine Learning Algorithms ------------------------
 
 # Goals:
 # - H20
@@ -10,14 +10,14 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -28,13 +28,13 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
 
-rcp_spec <- recipe(optins_trans ~ ., data = training(splits)) |>
-  step_timeseries_signature(optin_time) |>
+rcp_spec <- recipe(y ~ ., data = training(splits)) |>
+  step_timeseries_signature(ds) |>
   step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
   step_normalize(matches("(index.num)|(year)|(yday)")) |>
   step_rm(starts_with("lag_"))
@@ -80,8 +80,9 @@ rcp_spec |> prep() |> juice() |> glimpse()
 # Sys.getenv('JAVA_HOME')
 # Sys.setenv(JAVA_HOME="/usr/lib/jvm/jdk-17/")
 # Sys.getenv('JAVA_HOME')
+
 library(h2o)
-Sys.setenv(JAVA_HOME = "/usr/lib/jvm/jdk-17/")
+# Sys.setenv(JAVA_HOME = "/usr/lib/jvm/jdk-17/") # if more than one JAVA version installed
 h2o.init()
 
 
@@ -126,17 +127,14 @@ wrkfl_fit_h2o <- workflow() |>
 wrkfl_fit_h2o
 
 wrkfl_fit_h2o |> automl_leaderboard() |> head(20) |> View()
-gbm_name <- "GBM_3_AutoML_1_20230731_181500"
-xgb_name <- "XGBoost_3_AutoML_1_20230731_181500"
-stack_name <- "StackedEnsemble_BestOfFamily_1_AutoML_1_20230731_181500"
+gbm_name <- "GBM_3_AutoML_1_20251024_174351"
+xgb_name <- "XGBoost_3_AutoML_1_20251024_174351"
+stack_name <- "StackedEnsemble_BestOfFamily_1_AutoML_1_20251024_174351"
 
 # change default selected models
-wrkfl_fit_h20_gbm <- wrkfl_fit_h2o |>
-  automl_update_model(gbm_name)
-wrkfl_fit_h20_xgb <- wrkfl_fit_h2o |>
-  automl_update_model(xgb_name)
-wrkfl_fit_h20_stack <- wrkfl_fit_h2o |>
-  automl_update_model(stack_name)
+wrkfl_fit_h20_gbm <- wrkfl_fit_h2o |> automl_update_model(gbm_name)
+wrkfl_fit_h20_xgb <- wrkfl_fit_h2o |> automl_update_model(xgb_name)
+wrkfl_fit_h20_stack <- wrkfl_fit_h2o |> automl_update_model(stack_name)
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------

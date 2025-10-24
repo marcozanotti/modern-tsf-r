@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 7: Deep Learning Algorithms -------------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 2.1: Deep Learning Algorithms -------------------------------------
 
 # Goals:
 # - GluonTS / Torch
@@ -126,21 +126,21 @@ reticulate::use_python(python = Sys.getenv("GLUONTS_PYTHON"), required = TRUE)
 library(modeltime.gluonts)
 reticulate::py_config()
 
-setwd("~/Desktop/RProjects/tsforecasting-course") # sorry for this path
-source("R/utils.R")
-source("R/packages.R")
+# setwd("~/Desktop/RProjects/tsforecasting-course") # sorry for this path
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
 # Add ID column required by GluonTS Algos
-data_prep_tbl <- data_prep_tbl |> mutate(id = "subscribers", .before = everything())
-forecast_tbl <- forecast_tbl |> mutate(id = "subscribers", .before = everything())
+data_prep_tbl <- data_prep_tbl |> mutate(id = "email", .before = everything())
+forecast_tbl <- forecast_tbl |> mutate(id = "email", .before = everything())
 
 
 # * Train / Test Sets -----------------------------------------------------
@@ -149,12 +149,12 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
 
-rcp_spec_gluon <- recipe(optins_trans ~ optin_time + id, data = training(splits))
+rcp_spec_gluon <- recipe(y ~ ds + id, data = training(splits))
 rcp_spec_gluon |> prep() |> juice()
 rcp_spec_gluon |> prep() |> summary()
 
@@ -436,6 +436,7 @@ calibrate_evaluate_plot(
 
 # TORCH DEEP AR -----------------------------------------------------------
 
+# FIXME: bug in torch
 ?deep_ar()
 
 # Torch DeepAR
@@ -448,65 +449,65 @@ calibrate_evaluate_plot(
 # * Engines ---------------------------------------------------------------
 
 # Torch DeepAR default
-model_spec_deepar_torch_0 <- deep_ar(
-  id = "id",
-  freq = "D",
-  prediction_length = 56, # 8 weeks
-  epochs = 5, # Torch default to max_epochs
-  batch_size = 32,
-  num_cells = 40
-) |>
-  set_engine("torch")
+# model_spec_deepar_torch_0 <- deep_ar(
+#   id = "id",
+#   freq = "D",
+#   prediction_length = 56, # 8 weeks
+#   epochs = 5, # Torch default to max_epochs
+#   batch_size = 32,
+#   num_cells = 40
+# ) |>
+#   set_engine("torch")
 
-# Torch DeepAR +
-model_spec_deepar_torch_1 <- deep_ar(
-  id = "id",
-  freq = "D",
-  prediction_length = 56,
-  epochs = 10
-) |>
-  set_engine("torch")
+# # Torch DeepAR +
+# model_spec_deepar_torch_1 <- deep_ar(
+#   id = "id",
+#   freq = "D",
+#   prediction_length = 56,
+#   epochs = 10
+# ) |>
+#   set_engine("torch")
 
-# Torch DeepAR ++
-model_spec_deepar_torch_2 <- deep_ar(
-  id = "id",
-  freq = "D",
-  prediction_length = 56,
-  lookback_length = 56 * 4, # takes more time to train
-  epochs = 10
-) |>
-  set_engine("torch")
+# # Torch DeepAR ++
+# model_spec_deepar_torch_2 <- deep_ar(
+#   id = "id",
+#   freq = "D",
+#   prediction_length = 56,
+#   lookback_length = 56 * 4, # takes more time to train
+#   epochs = 10
+# ) |>
+#   set_engine("torch")
 
 
 # * Workflows -------------------------------------------------------------
 
 # Torch DeepAR default
-wrkfl_fit_deepar_torch_0 <- workflow() |>
-  add_model(model_spec_deepar_torch_0) |>
-  add_recipe(rcp_spec_gluon) |>
-  fit(data = training(splits))
+# wrkfl_fit_deepar_torch_0 <- workflow() |>
+#   add_model(model_spec_deepar_torch_0) |>
+#   add_recipe(rcp_spec_gluon) |>
+#   fit(data = training(splits))
 
-# Torch DeepAR +
-wrkfl_fit_deepar_torch_1 <- workflow() |>
-  add_model(model_spec_deepar_torch_1) |>
-  add_recipe(rcp_spec_gluon) |>
-  fit(data = training(splits))
+# # Torch DeepAR +
+# wrkfl_fit_deepar_torch_1 <- workflow() |>
+#   add_model(model_spec_deepar_torch_1) |>
+#   add_recipe(rcp_spec_gluon) |>
+#   fit(data = training(splits))
 
-# Torch DeepAR ++
-wrkfl_fit_deepar_torch_2 <- workflow() |>
-  add_model(model_spec_deepar_torch_2) |>
-  add_recipe(rcp_spec_gluon) |>
-  fit(data = training(splits))
+# # Torch DeepAR ++
+# wrkfl_fit_deepar_torch_2 <- workflow() |>
+#   add_model(model_spec_deepar_torch_2) |>
+#   add_recipe(rcp_spec_gluon) |>
+#   fit(data = training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
 
-calibrate_evaluate_plot(
-  wrkfl_fit_deepar_torch_0,
-  wrkfl_fit_deepar_torch_1,
-  wrkfl_fit_deepar_torch_2,
-  updated_desc = c("Toch DeepAR", "Toch DeepAR +", "Torch DeepAR ++")
-)
+# calibrate_evaluate_plot(
+#   wrkfl_fit_deepar_torch_0,
+#   wrkfl_fit_deepar_torch_1,
+#   wrkfl_fit_deepar_torch_2,
+#   updated_desc = c("Toch DeepAR", "Toch DeepAR +", "Torch DeepAR ++")
+# )
 
 
 
@@ -529,11 +530,11 @@ calibration_tbl <- modeltime_table(
   wrkfl_fit_gpfor_1,
   # GluonTS DEEP STATE
   wrkfl_fit_deepst_0,
-  wrkfl_fit_deepst_1,
+  wrkfl_fit_deepst_1
   # Torch DEEP AR
-  wrkfl_fit_deepar_torch_0,
-  wrkfl_fit_deepar_torch_1,
-  wrkfl_fit_deepar_torch_2
+  # wrkfl_fit_deepar_torch_0,
+  # wrkfl_fit_deepar_torch_1,
+  # wrkfl_fit_deepar_torch_2
 ) |>
   update_modeltime_description(.model_id = 1, .new_model_desc = "Glu DAR") |>
   update_modeltime_description(.model_id = 2, .new_model_desc = "Glu DAR - LSTM") |>
@@ -545,9 +546,9 @@ calibration_tbl <- modeltime_table(
   update_modeltime_description(.model_id = 8, .new_model_desc = "Glu GPF +") |>
   update_modeltime_description(.model_id = 9, .new_model_desc = "Glu DST") |>
   update_modeltime_description(.model_id = 10, .new_model_desc = "Glu DST +") |>
-  update_modeltime_description(.model_id = 11, .new_model_desc = "Tor DAR") |>
-  update_modeltime_description(.model_id = 12, .new_model_desc = "Tor DAR +") |>
-  update_modeltime_description(.model_id = 13, .new_model_desc = "Tor DAR ++") |>
+  # update_modeltime_description(.model_id = 11, .new_model_desc = "Tor DAR") |>
+  # update_modeltime_description(.model_id = 12, .new_model_desc = "Tor DAR +") |>
+  # update_modeltime_description(.model_id = 13, .new_model_desc = "Tor DAR ++") |>
   modeltime_calibrate(testing(splits))
 
 # * Evaluation
@@ -576,34 +577,9 @@ refit_tbl |>
 
 # * Save Artifacts --------------------------------------------------------
 
-wrkfl_fit_deepar_0 |>
-  save_gluonts_model(path = "artifacts/gluonts_deepar")
-
+wrkfl_fit_deepar_0 |> save_gluonts_model(path = "artifacts/gluonts_deepar")
 wrkfl_fit_deepar_0 <- load_gluonts_model("artifacts/gluonts_deepar")
 
-
-# * Deep Learning Ensembles -----------------------------------------------
-
-?ensemble_average()
-
-dl_ensemble_tbl <- modeltime_table(
-  wrkfl_fit_nbeats_0,
-  wrkfl_fit_deepst_1,
-  wrkfl_fit_deepar_torch_2
-)
-
-# Fitting
-ensemble_fit_mean <- dl_ensemble_tbl |>
-  ensemble_average(type = "mean")
-ensemble_fit_median <- dl_ensemble_tbl |>
-  ensemble_average(type = "median")
-
-# Evaluating
-calibrate_evaluate_plot(
-  ensemble_fit_mean,
-  ensemble_fit_median,
-  updated_desc = c("ENSEMBLE (MEAN)", "ENSEMBLE (MEDIAN)")
-)
 
 
 # DEEP LEARNING

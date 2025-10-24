@@ -113,6 +113,7 @@ load_data <- function(file_path, file_name, ext = ".parquet") {
     stop(sprintf("Unsupported file extension '%s'. Only .parquet and .csv are allowed.", ext))
   }
 
+  res_df <- tibble::as_tibble(res_df)
   return(res_df)
 
 }
@@ -144,17 +145,17 @@ save_data <- function(df, file_path, file_name, ext = ".parquet", overwrite = TR
 # function to prepare email data
 prepare_email_data <- function(save = TRUE) {
   
-  # subscribers
-  subscribers <- load_data(
+  # email
+  email <- load_data(
     file_path = "data/email/",
-    file_name = "subscribers",
+    file_name = "email",
     ext = ".csv"
   )
-  subscribers_daily_tbl <- subscribers |>
-    summarise_by_time(.date_var = optin_time, .by = "day", y = n()) |>
-    pad_by_time(.date_var = optin_time, .by = "day", .pad_value = 0) |> 
-    mutate(unique_id = "email_subscribers") |> 
-    rename(ds = optin_time) |> 
+  email_tbl <- email |>
+    summarise_by_time(.date_var = ds, .by = "day", y = n()) |>
+    pad_by_time(.date_var = ds, .by = "day", .pad_value = 0) |> 
+    mutate(unique_id = "email_email") |> 
+    rename(ds = ds) |> 
     select(unique_id, ds, y)
 
   # analytics
@@ -180,7 +181,7 @@ prepare_email_data <- function(save = TRUE) {
     summarise_by_time(ds, .by = "day", promo = n())
 
   # join all
-  email_data <- subscribers_daily_tbl |>
+  email_data <- email_tbl |>
     left_join(analytics_daily_tbl, by = "ds") |>
     left_join(events_daily_tbl, by = "ds") |>
     replace_na(list(promo = 0))
@@ -322,7 +323,7 @@ select_best_id <- function(calibration, n = 1, metric = "rmse", by_id = FALSE, i
 # Function to add lags
 lag_transf <- function(data){
   data_lags <- data %>%
-    tk_augment_lags(optins_trans, .lags = lags)
+    tk_augment_lags(y, .lags = lags)
   return(data_lags)
 }
 
@@ -331,7 +332,7 @@ lag_transf <- function(data){
 lag_transf_grouped <- function(data){
   data_lags <- data %>%
     group_by(id) %>%
-    tk_augment_lags(optins_trans, .lags = lags) %>%
+    tk_augment_lags(y, .lags = lags) %>%
     ungroup()
   return(data_lags)
 }

@@ -1,4 +1,4 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
+# Modern Time Series Forecasting with R ----
 
 # Lecture 6: Boosted Time Series Algorithms -------------------------------
 # Marco Zanotti
@@ -34,16 +34,16 @@ forecast_tbl <- artifacts_list$data$forecast_tbl
 splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE)
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
 
 rcp_spec_fourier <- recipe(
-  optins_trans ~ optin_time + .,
+  y ~ ds + .,
   data = training(splits)
 ) |>
-  step_fourier(optin_time, period = c(7, 14, 30, 90), K = 1)
+  step_fourier(ds, period = c(7, 14, 30, 90), K = 1)
 # recipe for the ARIMA model
 
 rcp_spec <- artifacts_list$recipes$rcp_spec |>
@@ -69,7 +69,7 @@ model_fit_arima <- arima_reg(
   seasonal_ma = 1
 ) |>
   set_engine("arima") |>
-  fit(optins_trans ~ optin_time, training(splits))
+  fit(y ~ ds, training(splits))
 
 # Auto-SARIMA with XREG
 model_spec_auto_sarima_xregs <- arima_reg() |>
@@ -292,7 +292,7 @@ model_fit_prophet_xregs <- prophet_reg(
   seasonality_yearly = TRUE
 ) |>
   set_engine("prophet") |>
-  fit(optins_trans ~ optin_time + event, data = training(splits))
+  fit(y ~ ds + promo, data = training(splits))
 
 # PROPHET with boosting
 model_spec_prophet_xgb <- prophet_boost(

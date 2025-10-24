@@ -1,4 +1,4 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
+# Modern Time Series Forecasting with R ----
 
 # Lecture Extra: Anomaly Detection ----------------------------------------
 # Marco Zanotti
@@ -25,37 +25,37 @@ library(stray)
 
 # Data --------------------------------------------------------------------
 
-subscribers_tbl <- read_rds("data/subscribers.rds")
+email_tbl <- read_rds("data/email.rds")
 
 
 # Pre-processing Data
-subscribers_daily_tbl <- subscribers_tbl |>
-  summarise_by_time(optin_time, .by = "day", optins = n()) |>
+email_tbl <- email_tbl |>
+  summarise_by_time(ds, .by = "day", y = n()) |>
   pad_by_time(.pad_value = 0)
 
-subscribers_daily_tbl |>
-  plot_time_series(optin_time, log1p(optins), .smooth = FALSE)
+email_tbl |>
+  plot_time_series(ds, log1p(y), .smooth = FALSE)
 
-data_prep_tbl <- subscribers_daily_tbl |>
+data_prep_tbl <- email_tbl |>
   # pre-processing
-  mutate(optins_trans = log_interval_vec(optins, limit_lower = 0, offset = 1)) |>
-  mutate(optins_trans = standardize_vec(optins_trans)) |>
+  mutate(y = log_interval_vec(y, limit_lower = 0, offset = 1)) |>
+  mutate(y = standardize_vec(y)) |>
   # fix missing values at beginning of series
   filter_by_time(.start_date = "2018-07-03") |>
-  select(-optins)
+  select(-y)
 
 data_prep_tbl |>
-  plot_time_series(optin_time, optins_trans)
+  plot_time_series(ds, y)
 
 
 
 # Anomaly detection -------------------------------------------------------
 
 data_prep_tbl |>
-  tk_anomaly_diagnostics(.date_var = optin_time, .value = optins_trans)
+  tk_anomaly_diagnostics(.date_var = ds, .value = y)
 
 data_prep_tbl |>
-  plot_anomaly_diagnostics(optin_time, optins_trans)
+  plot_anomaly_diagnostics(ds, y)
 
 
 # Functions
@@ -226,12 +226,12 @@ anomaly_score <- function(anomaly_data, weights = NULL) {
 
 
 # Test functions
-# data = data_prep_tbl$optins_trans
-# dates = data_prep_tbl$optin_time
+# data = data_prep_tbl$y
+# dates = data_prep_tbl$ds
 
 res_df <- anomaly_detection(
-  data = data_prep_tbl$optins_trans,
-  dates = data_prep_tbl$optin_time
+  data = data_prep_tbl$y,
+  dates = data_prep_tbl$ds
 )
 
 res_df

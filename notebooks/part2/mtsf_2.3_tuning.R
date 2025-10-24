@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 9: Hyperparameter Tuning ----------------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 2.3: Hyperparameter Tuning ----------------------------------------
 
 # Goals:
 # - Sequential / Non-Sequential Models
@@ -16,14 +16,14 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -34,21 +34,19 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 
 # Models ------------------------------------------------------------------
 
-calibration_ts_tbl <- read_rds("artifacts/calibration_ts.rds")
-calibration_ml_tbl <- read_rds("artifacts/calibration_ml.rds")
-calibration_boost_tbl <- read_rds("artifacts/calibration_boost.rds")
+calibration_ts_tbl <- read_rds("data/email/artifacts/calibration_ts.rds")
+calibration_ml_tbl <- read_rds("data/email/artifacts/calibration_ml.rds")
 
 # combine modeltime tables (calibration removed)
 model_tbl <- combine_modeltime_tables(
   calibration_ts_tbl,
-  calibration_ml_tbl,
-  calibration_boost_tbl
+  calibration_ml_tbl
 )
 
 # calibrate models again
@@ -76,8 +74,7 @@ calibration_tbl |>
 
 # NNETAR ------------------------------------------------------------------
 
-wrkfl_fit_nnetar <- calibration_tbl |>
-  pluck_modeltime_model(15)
+wrkfl_fit_nnetar <- calibration_tbl |> pluck_modeltime_model(15)
 wrkfl_fit_nnetar
 
 
@@ -128,7 +125,7 @@ resamples_tscv_lag <- time_series_cv(
 
 resamples_tscv_lag |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Grids -----------------------------------------------------------------
@@ -145,8 +142,8 @@ penalty()
 ?grid_latin_hypercube()
 
 set.seed(123)
-grid_spec_nnetar_lh1 <- grid_latin_hypercube(
-  parameters(model_spec_nnetar),
+grid_spec_nnetar_lh1 <- grid_space_filling(
+  extract_parameter_set_dials(model_spec_nnetar),
   size = 3
 )
 
@@ -252,42 +249,36 @@ calibrate_evaluate_plot(
 #   - Prophet
 # - IMPORTANT: Can use time_series_cv() or vfold_cv(). Usually better performance with vfold_cv().
 
-# PROPHET BOOST -----------------------------------------------------------
+# BOOST -----------------------------------------------------------
 
-wrkfl_fit_prophet_boost <- calibration_tbl |>
-  pluck_modeltime_model(18)
-wrkfl_fit_prophet_boost
+wrkfl_fit_boost <- calibration_tbl |> pluck_modeltime_model(13)
+wrkfl_fit_boost
 
 
 # * Recipes ---------------------------------------------------------------
 
-wrkfl_fit_prophet_boost |> extract_preprocessor() |> prep() |> juice() |> glimpse()
+wrkfl_fit_boost |> extract_preprocessor() |> prep() |> juice() |> glimpse()
 
 
 # * Engines ---------------------------------------------------------------
 
-wrkfl_fit_prophet_boost |> extract_spec_parsnip()
+wrkfl_fit_boost |> extract_spec_parsnip()
 
-model_spec_prophet_boost <- prophet_boost(
-  changepoint_num = 25,
-  changepoint_range = 0.8,
-  seasonality_yearly = FALSE,
-  seasonality_weekly = FALSE,
-  seasonality_daily = FALSE,
+model_spec_boost <- boost_tree(
   mtry = tune(),
   trees = 300,
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune()
+  loss_reduction = tune(),
+  mode = "regression"
 ) |>
-  set_engine("prophet_xgboost")
+  set_engine("xgboost")
 
 
 # * Workflows -------------------------------------------------------------
 
-wrkfl_tune_prophet_boost <- wrkfl_fit_prophet_boost |>
-  update_model(model_spec_prophet_boost)
+wrkfl_tune_boost <- wrkfl_fit_boost |> update_model(model_spec_boost)
 
 
 # * Cross Validation (VFCV) -----------------------------------------------
@@ -300,13 +291,13 @@ resamples_vfold <- vfold_cv(training(splits), v = 3)
 
 resamples_vfold |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans, .facet_ncol = 2)
+  plot_time_series_cv_plan(ds, y, .facet_ncol = 2)
 
 
 # * Grids -----------------------------------------------------------------
 
 # Parameters
-extract_parameter_set_dials(model_spec_prophet_boost)
+extract_parameter_set_dials(model_spec_boost)
 
 mtry()
 min_n()
@@ -319,14 +310,14 @@ loss_reduction()
 ?update.parameters()
 
 set.seed(123)
-grid_spec_prophet_boost_lh1 <- grid_latin_hypercube(
-  parameters(model_spec_prophet_boost) |>
+grid_spec_boost_lh1 <- grid_latin_hypercube(
+  extract_parameter_set_dials(model_spec_boost) |>
     update(mtry = mtry(range = c(1, 65))), # update a single parameter
   size = 3
 )
 
 set.seed(123)
-grid_spec_prophet_boost_lh2 <- grid_latin_hypercube(
+grid_spec_boost_lh2 <- grid_latin_hypercube(
   mtry(range = c(1, 65)),
   min_n(),
   tree_depth(),
@@ -352,10 +343,10 @@ message("Number of parallel workers: ", nbrOfWorkers())
 # Tuning 1 with VFCV
 tic()
 set.seed(123)
-tune_res_prophet_boost_lh1 <- wrkfl_tune_prophet_boost |>
+tune_res_boost_lh1 <- wrkfl_tune_boost |>
   tune_grid(
     resamples = resamples_vfold,
-    grid = grid_spec_prophet_boost_lh1,
+    grid = grid_spec_boost_lh1,
     metrics = default_forecast_accuracy_metric_set(),
     control = control_grid(verbose = TRUE, save_pred = TRUE)
   )
@@ -364,10 +355,10 @@ toc()
 # Tuning 2 with VFCV
 tic()
 set.seed(123)
-tune_res_prophet_boost_lh2 <- wrkfl_tune_prophet_boost |>
+tune_res_boost_lh2 <- wrkfl_tune_boost |>
   tune_grid(
     resamples = resamples_vfold,
-    grid = grid_spec_prophet_boost_lh2,
+    grid = grid_spec_boost_lh2,
     metrics = default_forecast_accuracy_metric_set(),
     control = control_grid(verbose = TRUE, save_pred = TRUE)
   )
@@ -379,13 +370,13 @@ plan(strategy = sequential)
 
 
 # Inspect Results (LH2 better)
-tune_res_prophet_boost_lh1 |> show_best(metric = "rmse", n = Inf)
-tune_res_prophet_boost_lh1 |>
+tune_res_boost_lh1 |> show_best(metric = "rmse", n = Inf)
+tune_res_boost_lh1 |>
   autoplot() +
   geom_smooth(se = FALSE)
 
-tune_res_prophet_boost_lh2 |> show_best(metric = "rmse", n = Inf)
-tune_res_prophet_boost_lh2 |>
+tune_res_boost_lh2 |> show_best(metric = "rmse", n = Inf)
+tune_res_boost_lh2 |>
   autoplot() +
   geom_smooth(se = FALSE)
 
@@ -394,9 +385,9 @@ tune_res_prophet_boost_lh2 |>
 
 # Re-train the model on the whole training set
 set.seed(123)
-wrkfl_fit_prophet_boost_vfcv <- wrkfl_tune_prophet_boost |>
+wrkfl_fit_boost_vfcv <- wrkfl_tune_boost |>
   finalize_workflow(
-    tune_res_prophet_boost_lh2 |>
+    tune_res_boost_lh2 |>
       show_best(metric = "rmse", n = Inf) |>
       slice_min(mean)
   ) |>
@@ -404,8 +395,8 @@ wrkfl_fit_prophet_boost_vfcv <- wrkfl_tune_prophet_boost |>
 
 # Re-evaluate the model on the whole test set
 calibrate_evaluate_plot(
-  wrkfl_fit_prophet_boost,
-  wrkfl_fit_prophet_boost_vfcv
+  wrkfl_fit_boost,
+  wrkfl_fit_boost_vfcv
 )
 
 
@@ -418,13 +409,13 @@ calibrate_evaluate_plot(
 calibration_tune_tbl <- modeltime_table(
   wrkfl_fit_nnetar,
   wrkfl_fit_nnetar_tscv,
-  wrkfl_fit_prophet_boost,
-  wrkfl_fit_prophet_boost_vfcv
+  wrkfl_fit_boost,
+  wrkfl_fit_boost_vfcv
 ) |>
   update_modeltime_description(.model_id = 1, .new_model_desc = "NNETAR") |>
   update_modeltime_description(.model_id = 2, .new_model_desc = "NNETAR - TUNED") |>
-  update_modeltime_description(.model_id = 3, .new_model_desc = "PROPHET BOOST") |>
-  update_modeltime_description(.model_id = 4, .new_model_desc = "PROPHET BOOST - TUNED") |>
+  update_modeltime_description(.model_id = 3, .new_model_desc = "BOOST") |>
+  update_modeltime_description(.model_id = 4, .new_model_desc = "BOOST - TUNED") |>
   modeltime_calibrate(testing(splits))
 
 # * Evaluation
@@ -459,6 +450,5 @@ refit_tbl |>
 
 # * Save Artifacts --------------------------------------------------------
 
-calibration_tune_tbl |>
-  write_rds("artifacts/calibration_tune.rds")
+calibration_tune_tbl |> write_rds("data/email/artifacts/calibration_tune.rds")
 

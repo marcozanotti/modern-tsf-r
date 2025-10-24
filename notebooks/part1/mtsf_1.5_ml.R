@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 5: Machine Learning Algorithms ----------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 1.5: Machine Learning Algorithms ----------------------------------
 
 # Goals:
 # - Linear Regression
@@ -21,21 +21,14 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
-
-# packages treesnip and catboost have to be installed from dev versions
-# remotes::install_github("curso-r/treesnip")
-# devtools::install_url(
-#   "https://github.com/catboost/catboost/releases/download/v1.0.0/catboost-R-Linux-1.0.0.tgz",
-#   INSTALL_opts = c("--no-multiarch", "--no-test-load")
-# )
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -46,7 +39,7 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
@@ -206,16 +199,10 @@ model_spec_mars <- mars(
   mode = "regression",
   num_terms = 20
 ) |>
-  set_engine("earth", endspan = 100)
+  set_engine("earth")
 
 
 # * Workflows -------------------------------------------------------------
-
-# MARS
-wrkfl_fit_mars <- workflow() |>
-  add_model(model_spec_mars) |>
-  add_formula(optins_trans ~ as.numeric(optin_time)) |>
-  fit(training(splits))
 
 # MARS + Lags
 wrkfl_fit_mars_lag <- workflow() |>
@@ -227,9 +214,8 @@ wrkfl_fit_mars_lag <- workflow() |>
 # * Calibration, Evaluation & Plotting ------------------------------------
 
 calibrate_evaluate_plot(
-  wrkfl_fit_mars,
   wrkfl_fit_mars_lag,
-  updated_desc = c("MARS", "MARS + LAG")
+  updated_desc = c("MARS + LAG")
 )
 
 
@@ -427,8 +413,7 @@ model_spec_rf <- rand_forest(
   trees = 1000,
   min_n = 25
 ) |>
-  set_engine("randomForest")
-# set_engine("ranger") # faster implementation
+set_engine("ranger")
 
 
 # * Workflows -------------------------------------------------------------
@@ -498,8 +483,8 @@ model_spec_lightgbm <- boost_tree(mode = "regression") |>
 # objective = "reg:tweedie"
 
 # CAT BOOST
-# model_spec_catboost <- boost_tree(mode = "regression") |>
-#   set_engine("catboost")
+model_spec_catboost <- boost_tree(mode = "regression") |>
+  set_engine("catboost")
 # loss_function = "Tweedie:variance_power=1.5"
 
 
@@ -553,29 +538,29 @@ wrkfl_fit_lightgbm_lag |>
 
 
 # CAT BOOST + Splines
-# set.seed(123)
-# wrkfl_fit_catboost_spline <- workflow() |>
-#   add_model(model_spec_catboost) |>
-#   add_recipe(rcp_spec_spline) |>
-#   fit(training(splits))
-#
-# # CAT BOOST + Lags
-# set.seed(123)
-# wrkfl_fit_catboost_lag <- workflow() |>
-#   add_model(model_spec_catboost) |>
-#   add_recipe(rcp_spec_lag) |>
-#   fit(training(splits))
-#
-# wrkfl_fit_catboost_lag |>
-#   parsnip::extract_fit_engine() |>
-#   catboost::catboost.get_feature_importance() |>
-#   as_tibble(rownames = "feature") |>
-#   rename(value = V1) |>
-#   arrange(-value) |>
-#   mutate(feature = as_factor(feature) |> fct_rev()) |>
-#   dplyr::slice(1:10) |>
-#   ggplot(aes(value, feature)) +
-#   geom_col()
+set.seed(123)
+wrkfl_fit_catboost_spline <- workflow() |>
+  add_model(model_spec_catboost) |>
+  add_recipe(rcp_spec_spline) |>
+  fit(training(splits))
+
+# CAT BOOST + Lags
+set.seed(123)
+wrkfl_fit_catboost_lag <- workflow() |>
+  add_model(model_spec_catboost) |>
+  add_recipe(rcp_spec_lag) |>
+  fit(training(splits))
+
+wrkfl_fit_catboost_lag |>
+  parsnip::extract_fit_engine() |>
+  catboost::catboost.get_feature_importance() |>
+  as_tibble(rownames = "feature") |>
+  rename(value = V1) |>
+  arrange(-value) |>
+  mutate(feature = as_factor(feature) |> fct_rev()) |>
+  dplyr::slice(1:10) |>
+  ggplot(aes(value, feature)) +
+  geom_col()
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
@@ -583,14 +568,14 @@ wrkfl_fit_lightgbm_lag |>
 calibrate_evaluate_plot(
   wrkfl_fit_xgb_spline,
   wrkfl_fit_xgb_lag,
-  # wrkfl_fit_lightgbm_spline,
-  # wrkfl_fit_lightgbm_lag,
-  # wrkfl_fit_catboost_spline,
-  # wrkfl_fit_catboost_lag,
+  wrkfl_fit_lightgbm_spline,
+  wrkfl_fit_lightgbm_lag,
+  wrkfl_fit_catboost_spline,
+  wrkfl_fit_catboost_lag,
   updated_desc = c(
-    "XGB - Splines", "XGB - Lags"#,
-    # "LIGHT GBM - Splines", "LIGHT GBM - Lags",
-    # "CATBOOST - Splines", "CATBOOST - Lags"
+    "XGB - Splines", "XGB - Lags",
+    "LIGHT GBM - Splines", "LIGHT GBM - Lags",
+    "CATBOOST - Splines", "CATBOOST - Lags"
   )
 )
 # learn how to train Light GBM and CAT Boost
@@ -749,6 +734,10 @@ calibration_tbl <- modeltime_table(
   # BOOSTING
   wrkfl_fit_xgb_spline,
   wrkfl_fit_xgb_lag,
+  wrkfl_fit_lightgbm_spline,
+  wrkfl_fit_lightgbm_lag,
+  wrkfl_fit_catboost_spline,
+  wrkfl_fit_catboost_lag,
   # CUBIST
   wrkfl_fit_cubist_spline,
   wrkfl_fit_cubist_lag,
@@ -824,6 +813,5 @@ refit_tbl |>
 
 # * Save Artifacts --------------------------------------------------------
 
-calibration_tbl |>
-  write_rds("artifacts/calibration_ml.rds")
+calibration_tbl |> write_rds("data/email/artifacts/calibration_ml.rds")
 

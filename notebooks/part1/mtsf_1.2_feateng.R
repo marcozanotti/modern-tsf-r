@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 2: Features Engineering & Recipes -------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 1.2: Features Engineering & Recipes -------------------------------
 
 # Goals:
 # - Learn advanced features engineering workflows & techniques
@@ -21,9 +21,8 @@ source("src/R/packages.R")
 
 # Data --------------------------------------------------------------------
 
-subscribers_tbl <- read_rds("data/subscribers/subscribers.rds")
-analytics_tbl <- read_rds("data/subscribers/analytics_hourly.rds")
-events_tbl <- read_rds("data/subscribers/events.rds")
+email_tbl <- load_data("data/email", "email_prep", ext = ".parquet")
+
 
 
 
@@ -31,51 +30,30 @@ events_tbl <- read_rds("data/subscribers/events.rds")
 
 # Pre-processing Data
 
-# subscribers data
-subscribers_daily_tbl <- subscribers_tbl |>
-  summarise_by_time(optin_time, .by = "day", optins = n()) |>
-  pad_by_time(.pad_value = 0)
+email_tbl |> plot_time_series(ds, log1p(y), .smooth = FALSE)
 
-subscribers_daily_tbl |>
-  plot_time_series(optin_time, log1p(optins), .smooth = FALSE)
-
-data_prep_tbl <- subscribers_daily_tbl |>
+data_prep_tbl <- email_tbl |>
   # pre-processing
-  mutate(optins_trans = log_interval_vec(optins, limit_lower = 0, offset = 1)) |>
-  mutate(optins_trans = standardize_vec(optins_trans)) |>
+  mutate(y = log_interval_vec(y, limit_lower = 0, offset = 1)) |>
+  mutate(y = standardize_vec(y)) |>
   # fix missing values at beginning of series
   filter_by_time(.start_date = "2018-07-03") |>
   # Cleaning
-  mutate(optins_trans_cleaned = ts_clean_vec(optins_trans, period = 7)) |>
-  mutate(optins_trans = ifelse(
-    optin_time |> between_time("2018-11-18", "2018-11-20"),
-    optins_trans_cleaned,
-    optins_trans)
+  mutate(y_trans_cleaned = ts_clean_vec(y, period = 7)) |>
+  mutate(y = ifelse(
+    ds |> between_time("2018-11-18", "2018-11-20"),
+    y_trans_cleaned,
+    y)
   ) |>
-  select(-optins, -optins_trans_cleaned)
-
-data_prep_tbl |>
-  plot_time_series(optin_time, optins_trans)
-
-# google analytics
-analytics_prep_tbl <- analytics_tbl |>
-  mutate(date = ymd_h(dateHour), .before = everything()) |>
-  summarise_by_time(date, .by = "day", across(pageViews:sessions, .fns = sum)) |>
+  select(-y, -y_trans_cleaned) |> 
   mutate(across(pageViews:sessions, .fns = log1p)) |>
   mutate(across(pageViews:sessions, .fns = standardize_vec))
 
-analytics_prep_tbl |>
-  pivot_longer(-date) |>
-  plot_time_series(date, .value = value, .facet_nrow = 3, .facet_vars = name)
-
-# events data
-events_daily_tbl <- events_tbl |>
-  mutate(event_date = ymd_hms(event_date)) |>
-  summarise_by_time(event_date, .by = "day", event = n())
-
-events_daily_tbl |>
-  pad_by_time(.pad_value = 0) |>
-  plot_time_series(event_date, event, .smooth = FALSE)
+data_prep_tbl |> plot_time_series(ds, y)
+data_prep_tbl |>
+  pivot_longer(cols = pageViews:sessions) |>
+  plot_time_series(ds, .value = value, .facet_nrow = 3, .facet_vars = name)
+data_prep_tbl |> plot_time_series(ds, promo, .smooth = FALSE)
 
 
 # * Time-Based Features ---------------------------------------------------
@@ -94,22 +72,21 @@ data_prep_signature_tbl |> glimpse()
 # * Trend-Based Features --------------------------------------------------
 
 # linear trend
-data_prep_signature_tbl |>
-  plot_time_series_regression(optin_time, .formula = optins_trans ~ index.num)
+data_prep_signature_tbl |> plot_time_series_regression(ds, .formula = y ~ index.num)
 
 # nonlinear trend - basis splines
 data_prep_signature_tbl |>
   plot_time_series_regression(
-    optin_time,
-    optins_trans ~ splines::bs(index.num, df = 3),
+    ds,
+    y ~ splines::bs(index.num, df = 3),
     .show_summary = TRUE
   )
 
 # nonlinear trend - natural splines
 data_prep_signature_tbl |>
   plot_time_series_regression(
-    optin_time,
-    optins_trans ~ splines::ns(index.num, knots = quantile(index.num, probs = c(0.25, 0.5))),
+    ds,
+    y ~ splines::ns(index.num, knots = quantile(index.num, probs = c(0.25, 0.5))),
     .show_summary = TRUE
   )
 
@@ -118,21 +95,17 @@ data_prep_signature_tbl |>
 
 # weekly seasonality
 data_prep_signature_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ wday.lbl, .show_summary = TRUE)
+  plot_time_series_regression(ds, y ~ wday.lbl, .show_summary = TRUE)
 
 # monthly seasonality
 data_prep_signature_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ month.lbl, .show_summary = TRUE)
+  plot_time_series_regression(ds, y ~ month.lbl, .show_summary = TRUE)
 
 
 # * Interaction Features --------------------------------------------------
 
 data_prep_signature_tbl |>
-  plot_time_series_regression(
-    optin_time,
-    optins_trans ~ (as.factor(week2) * wday.lbl),
-    .show_summary = TRUE
-  )
+  plot_time_series_regression(ds, y ~ (as.factor(week2) * wday.lbl), .show_summary = TRUE)
 
 
 # * Rolling Average Features ----------------------------------------------
@@ -141,15 +114,14 @@ data_prep_signature_tbl |>
 
 data_prep_rolls_tbl <- data_prep_tbl |>
   tk_augment_slidify(
-    optins_trans, mean,
+    y, mean,
     .period = c(7, 14, 30, 90),
     .align = "center",
     .partial = TRUE
   )
 data_prep_rolls_tbl |> glimpse()
 
-data_prep_rolls_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ ., .show_summary = TRUE)
+data_prep_rolls_tbl |> plot_time_series_regression(ds, y ~ ., .show_summary = TRUE)
 
 
 # * Lag Features ----------------------------------------------------------
@@ -157,76 +129,64 @@ data_prep_rolls_tbl |>
 # tk_augment_lags
 
 data_prep_tbl |>
-  plot_acf_diagnostics(optin_time, optins_trans, .lags = 100)
+  plot_acf_diagnostics(ds, y, .lags = 100)
 
 data_prep_lags_tbl <- data_prep_tbl |>
-  tk_augment_lags(optins_trans, .lags = c(1, 7, 14, 30, 90, 365)) |>
+  tk_augment_lags(y, .lags = c(1, 7, 14, 30, 90, 365)) |>
+  select(-unique_id, -c(pageViews:promo)) |> 
   drop_na()
 data_prep_lags_tbl |> glimpse()
 
-data_prep_lags_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ ., .show_summary = TRUE)
+data_prep_lags_tbl |> plot_time_series_regression(ds, y ~ ., .show_summary = TRUE)
 
 
 # * Fourier Series Features -----------------------------------------------
 
 # - tk_augment_fourier
 
-data_prep_tbl |>
-  plot_acf_diagnostics(optin_time, optins_trans, .lags = 100)
+data_prep_tbl |> plot_acf_diagnostics(ds, y, .lags = 100)
 
 data_prep_fourier_tbl <- data_prep_tbl |>
-  tk_augment_fourier(optin_time, .periods = c(1, 7, 14, 30, 90, 365), .K = 2)
+  tk_augment_fourier(ds, .periods = c(1, 7, 14, 30, 90, 365), .K = 2) |> 
+  select(-unique_id, -c(pageViews:promo))
 data_prep_fourier_tbl |> glimpse()
 
-data_prep_fourier_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ ., .show_summary = TRUE)
+data_prep_fourier_tbl |> plot_time_series_regression(ds, y ~ ., .show_summary = TRUE)
 
 
-# * Event Data Features ---------------------------------------------------
+# * promo Data Features ---------------------------------------------------
 
-events_daily_tbl |> glimpse()
 
-data_prep_events_tbl <- data_prep_tbl |>
-  left_join(events_daily_tbl, by = c("optin_time" = "event_date")) |>
-  mutate(event = ifelse(is.na(event), 0, event))
-data_prep_events_tbl |> glimpse()
-
-data_prep_events_tbl |>
-  plot_time_series(optin_time, optins_trans, .smooth = FALSE, .interactive = FALSE) +
+data_prep_tbl |>
+  plot_time_series(ds, y, .smooth = FALSE, .interactive = FALSE) +
   geom_point(
-    aes(x = optin_time, y = optins_trans), color = "red",
-    data = data_prep_events_tbl |> filter(event == 1)
+    aes(x = ds, y = y), color = "red",
+    data = data_prep_tbl |> filter(promo == 1)
   )
 
-data_prep_events_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ ., .show_summary = TRUE)
+data_prep_tbl |>
+  select(ds, y, promo) |> 
+  plot_time_series_regression(ds, y ~ ., .show_summary = TRUE)
 
 
 # * External Regressor Features -------------------------------------------
 
-analytics_prep_tbl |> glimpse()
-
-data_prep_google_tbl <- data_prep_tbl |>
-  left_join(analytics_prep_tbl, by = c("optin_time" = "date")) |>
-  drop_na()
-data_prep_google_tbl |> glimpse()
-
-data_prep_google_tbl |>
+data_prep_tbl |>
   plot_acf_diagnostics(
-    optin_time, optins_trans,
+    ds, y,
     .lags = 100,
     .ccf_vars = pageViews:sessions,
     .show_ccf_vars_only = TRUE
   )
 
-data_prep_google_tbl <- data_prep_google_tbl |>
+data_prep_google_tbl <- data_prep_tbl |>
   tk_augment_lags(pageViews:sessions, .lags = c(7, 42)) |>
   drop_na()
 data_prep_google_tbl |> glimpse()
 
 data_prep_google_tbl |>
-  plot_time_series_regression(optin_time, optins_trans ~ ., .show_summary = TRUE)
+  select(-unique_id, -promo) |> 
+  plot_time_series_regression(ds, y ~ ., .show_summary = TRUE)
 
 
 
@@ -238,25 +198,27 @@ data_prep_google_tbl |>
 # may contain feature engineering steps
 
 # Splitting Data
-subscribers_daily_tbl |> tk_summary_diagnostics()
+email_tbl |> tk_summary_diagnostics()
 
-splits <- time_series_split(subscribers_daily_tbl, assess = 7 * 8, cumulative = TRUE)
+splits <- email_tbl |> 
+  select(ds, y) |> 
+  time_series_split(, date_var = ds, assess = 7 * 8, cumulative = TRUE)
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins)
+  plot_time_series_cv_plan(ds, y)
 
 # Creating Recipe
-recipe_spec_full <- recipe(optins ~ ., data = training(splits)) |>
-
+recipe_spec_full <- recipe(y ~ ., data = training(splits)) |>
+  
   # pre-processing steps
-  step_log_interval(optins, limit_lower = 0, offset = 1) |>
-  step_normalize(optins) |>
-  step_filter(optin_time >= "2018-07-03") |>
-  step_ts_clean(optins, period = 7) |>
+  step_log_interval(y, limit_lower = 0, offset = 1) |>
+  step_normalize(y) |>
+  step_filter(ds >= "2018-07-03") |>
+  step_ts_clean(y, period = 7) |>
 
   # features engineering steps
   # time-based, trend and seasonal features
-  step_timeseries_signature(optin_time) |>
+  step_timeseries_signature(ds) |>
   step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
   step_normalize(matches("(index.num)|(year)|(yday)")) |>
   step_dummy(all_nominal(), one_hot = TRUE) |>
@@ -265,15 +227,15 @@ recipe_spec_full <- recipe(optins ~ ., data = training(splits)) |>
   step_interact(~ matches("week2") * matches("wday.lbl")) |>
   # rolling features
   step_slidify_augment(
-    optins, .f = mean, period = c(7, 14, 30, 90), align = "center", partial = TRUE
+    y, .f = mean, period = c(7, 14, 30, 90), align = "center", partial = TRUE
   ) |>
   # lag features
-  # step_lag(optins, lag = 56) |> # should remove NA's
+  # step_lag(y, lag = 56) |> # should remove NA's
   # fourier series features
-  step_fourier(optin_time, period = c(7, 14, 30, 90), K = 2) |>
-  step_rm(optin_time)
+  step_fourier(ds, period = c(7, 14, 30, 90), K = 2) |>
+  step_rm(ds)
 
-# Note: cannot add event data or external regressors via recipe !!!!
+# Note: cannot add promo data or external regressors via recipe !!!!
 
 recipe_spec_full
 recipe_spec_full |> prep() |> juice() |> glimpse()
@@ -283,28 +245,16 @@ model_spec_lm <- linear_reg() |>
   set_engine("lm") |>
   set_mode("regression")
 
-model_spec_rf <- rand_forest() |>
-  set_engine("ranger") |>
-  set_mode("regression")
-
 workflow_fit_lm <- workflow() |>
   add_model(model_spec_lm) |>
   add_recipe(recipe_spec_full) |>
   fit(training(splits))
 
-workflow_fit_rf <- workflow() |>
-  add_model(model_spec_rf) |>
-  add_recipe(recipe_spec_full) |>
-  fit(training(splits))
-
-calibration_tbl <- modeltime_table(
-  workflow_fit_lm,
-  workflow_fit_rf
-) |>
+calibration_tbl <- modeltime_table(workflow_fit_lm) |>
   modeltime_calibrate(new_data = testing(splits), quiet = FALSE)
 
 calibration_tbl |>
-  modeltime_forecast(new_data = testing(splits), actual_data = subscribers_daily_tbl) |>
+  modeltime_forecast(new_data = testing(splits), actual_data = email_tbl) |>
   plot_modeltime_forecast()
 
 calibration_tbl |> modeltime_accuracy()
@@ -315,21 +265,21 @@ calibration_tbl |> modeltime_accuracy()
 
 # * Pre-processing Data ---------------------------------------------------
 
-subscribers_daily_tbl |> glimpse()
-events_daily_tbl |> glimpse()
+email_tbl |> glimpse()
 
 # pre-processing target variable
-subscribers_prep_tbl <- subscribers_daily_tbl |>
-  mutate(optins_trans = log_interval_vec(optins, limit_lower = 0, offset = 1)) |>
-  mutate(optins_trans = standardize_vec(optins_trans)) |>
+email_prep_tbl <- email_tbl |>
+  select(-unique_id) |> 
+  mutate(y = log_interval_vec(y, limit_lower = 0, offset = 1)) |>
+  mutate(y = standardize_vec(y)) |>
   filter_by_time(.start_date = "2018-07-03") |>
-  mutate(optins_trans_cleaned = ts_clean_vec(optins_trans, period = 7)) |>
-  mutate(optins_trans = ifelse(
-    optin_time |> between_time("2018-11-18", "2018-11-20"),
-    optins_trans_cleaned,
-    optins_trans)
+  mutate(y_cleaned = ts_clean_vec(y, period = 7)) |>
+  mutate(y = ifelse(
+    ds |> between_time("2018-11-18", "2018-11-20"),
+    y_cleaned,
+    y)
   ) |>
-  select(-optins, -optins_trans_cleaned)
+  select(-y_cleaned)
 
 # save key parameters
 limit_lower <- 0
@@ -349,25 +299,23 @@ horizon <- 7 * 8
 lag_period <- 7 * 8
 rolling_periods <- c(30, 60, 90)
 
-data_prep_full_tbl <- subscribers_prep_tbl %>%
+data_prep_full_tbl <- email_prep_tbl %>%
   # Add future window
-  bind_rows(future_frame(.data = ., optin_time, .length_out = horizon)) |>
+  bind_rows(future_frame(.data = ., ds, .length_out = horizon)) |>
   # Add Autocorrelated Lags
-  tk_augment_lags(optins_trans, .lags = lag_period) |>
+  tk_augment_lags(y, .lags = lag_period) |>
   # Add rolling features
   tk_augment_slidify(
-    optins_trans_lag56, mean, .period = rolling_periods, .align = "center", .partial = TRUE
+    y_lag56, mean, .period = rolling_periods, .align = "center", .partial = TRUE
   ) |>
-  # Add Events
-  left_join(events_daily_tbl, by = c("optin_time" = "event_date")) |>
-  mutate(event = ifelse(is.na(event), 0, event)) |>
+  # Keep Promo
+  select(-c(pageViews:sessions)) |>
   # Reformat Columns
   rename_with(.cols = contains("lag"), .fn = ~ str_c("lag_", .))
 
 data_prep_full_tbl |>
-  pivot_longer(-optin_time) |>
-  plot_time_series(optin_time, value, name, .smooth = FALSE)
-data_prep_full_tbl |> tail(7 * 8 + 1)
+  pivot_longer(-ds) |>
+  plot_time_series(ds, value, name, .smooth = FALSE)
 
 
 # * Separate into Modelling & Forecast Data -------------------------------
@@ -378,7 +326,8 @@ data_prep_tbl <- data_prep_full_tbl |>
   slice_head(n = nrow(data_prep_full_tbl) - horizon)
 
 forecast_tbl <- data_prep_full_tbl |>
-  slice_tail(n = horizon)
+  slice_tail(n = horizon) |> 
+  mutate(promo = 0)
 
 
 # * Train / Test Sets -----------------------------------------------------
@@ -387,7 +336,7 @@ splits <- time_series_split(data_prep_tbl, assess = horizon, cumulative = TRUE)
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
@@ -396,31 +345,31 @@ splits |>
 # - Time Series Signature - Adds bulk time-based features
 # - Interaction: wday.lbl:week2
 # - Fourier Features
-rcp_spec <- recipe(optins_trans ~ ., data = training(splits)) |>
+rcp_spec <- recipe(y ~ ., data = training(splits)) |>
   # Time Series Signature
-  step_timeseries_signature(optin_time) |>
+  step_timeseries_signature(ds) |>
   step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
   step_normalize(matches("(index.num)|(year)|(yday)")) |>
   step_dummy(all_nominal(), one_hot = TRUE) |>
   # Interaction
   step_interact(~ matches("week2") * matches("wday.lbl")) |>
   # Fourier
-  step_fourier(optin_time, period = c(7, 14, 30, 90, 365), K = 2)
+  step_fourier(ds, period = c(7, 14, 30, 90, 365), K = 2)
 rcp_spec |> prep() |> juice() |> glimpse()
 
 # Spline Recipe
 # - natural spline series on index.num
 rcp_spec_spline <- rcp_spec |>
   step_ns(ends_with("index.num"), deg_free = 2) |>
-  step_rm(optin_time) |>
+  step_rm(ds) |>
   step_rm(starts_with("lag_"))
 rcp_spec_spline |> prep() |> juice() |> glimpse()
 
 # Lag Recipe
-# - lags of optins_trans and rolls
+# - lags of y and rolls
 rcp_spec_lag <- rcp_spec |>
   step_naomit(starts_with("lag_")) |>
-  step_rm(optin_time)
+  step_rm(ds)
 rcp_spec_lag |> prep() |> juice() |> glimpse()
 
 
@@ -509,54 +458,53 @@ calibration_tbl |>
   plot_modeltime_forecast()
 
 # Refitting (problem in refitting !!!!!)
-refit_tbl <- calibration_tbl |>
-  modeltime_refit(data = data_prep_tbl)
+# refit_tbl <- calibration_tbl |>
+#   modeltime_refit(data = data_prep_tbl)
+
+# refit_tbl |>
+#   modeltime_forecast(new_data = data_prep_tbl, actual_data = data_prep_tbl) |>
+#   plot_modeltime_forecast()
+
+# refit_tbl |>
+#   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
+#   plot_modeltime_forecast()
 
 
-refit_tbl |>
-  modeltime_forecast(new_data = data_prep_tbl, actual_data = data_prep_tbl) |>
-  plot_modeltime_forecast()
+# refit_tbl |>
+#   modeltime_forecast(new_data = data_prep_tbl, actual_data = data_prep_tbl) |>
+#   mutate(
+#     across(
+#       .value:.conf_hi,
+#       .fns = ~ standardize_inv_vec(x = ., mean = std_mean, sd = std_sd)
+#     )
+#   ) |>
+#   mutate(
+#     across(
+#       .value:.conf_hi,
+#       .fns = ~ log_interval_inv_vec(
+#         x = ., limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
+#       )
+#     )
+#   ) |>
+#   plot_modeltime_forecast()
 
-refit_tbl |>
-  modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
-  plot_modeltime_forecast()
-
-
-refit_tbl |>
-  modeltime_forecast(new_data = data_prep_tbl, actual_data = data_prep_tbl) |>
-  mutate(
-    across(
-      .value:.conf_hi,
-      .fns = ~ standardize_inv_vec(x = ., mean = std_mean, sd = std_sd)
-    )
-  ) |>
-  mutate(
-    across(
-      .value:.conf_hi,
-      .fns = ~ log_interval_inv_vec(
-        x = ., limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
-      )
-    )
-  ) |>
-  plot_modeltime_forecast()
-
-refit_tbl |>
-  modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
-  mutate(
-    across(
-      .value:.conf_hi,
-      .fns = ~ standardize_inv_vec(x = ., mean = std_mean, sd = std_sd)
-    )
-  ) |>
-  mutate(
-    across(
-      .value:.conf_hi,
-      .fns = ~ log_interval_inv_vec(
-        x = ., limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
-      )
-    )
-  ) |>
-  plot_modeltime_forecast()
+# refit_tbl |>
+#   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
+#   mutate(
+#     across(
+#       .value:.conf_hi,
+#       .fns = ~ standardize_inv_vec(x = ., mean = std_mean, sd = std_sd)
+#     )
+#   ) |>
+#   mutate(
+#     across(
+#       .value:.conf_hi,
+#       .fns = ~ log_interval_inv_vec(
+#         x = ., limit_lower = limit_lower, limit_upper = limit_upper, offset = offset
+#       )
+#     )
+#   ) |>
+#   plot_modeltime_forecast()
 
 
 # * Save Artifacts --------------------------------------------------------
@@ -573,11 +521,6 @@ feature_engineering_artifacts_list <- list(
     "rcp_spec_spline" = rcp_spec_spline,
     "rcp_spec_lag" = rcp_spec_lag
   ),
-  # Models / Workflows
-  models = list(
-    "wrkfl_fit_lm_1_spline" = wrkfl_fit_lm_1_spline,
-    "wrkfl_fit_lm_2_lag" = wrkfl_fit_lm_2_lag
-  ),
   # Inversion Parameters
   standardize = list(
     std_mean = std_mean,
@@ -591,5 +534,5 @@ feature_engineering_artifacts_list <- list(
 )
 
 feature_engineering_artifacts_list |>
-  write_rds("artifacts/feature_engineering_artifacts_list.rds")
+  write_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 

@@ -1,4 +1,4 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
+# Modern Time Series Forecasting with R ----
 
 # Lecture 13: Neural Prophet Algorithm ------------------------------------
 # Marco Zanotti
@@ -119,8 +119,8 @@ artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
-# data_prep_tbl <- data_prep_tbl |> mutate(id = "subscribers", .before = everything())
-# forecast_tbl <- forecast_tbl |> mutate(id = "subscribers", .before = everything())
+# data_prep_tbl <- data_prep_tbl |> mutate(id = "email", .before = everything())
+# forecast_tbl <- forecast_tbl |> mutate(id = "email", .before = everything())
 
 
 # * Train / Test Sets -----------------------------------------------------
@@ -129,7 +129,7 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
@@ -156,7 +156,7 @@ model_fit_prophet_xregs <- prophet_reg(
   seasonality_yearly = TRUE
 ) |>
   set_engine("prophet") |>
-  fit(optins_trans ~ optin_time + event, data = training(splits))
+  fit(y ~ ds + promo, data = training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
@@ -189,12 +189,12 @@ model_fit_nprophet <- neural_prophet(
   seasonality_mode = "additive"
 ) %>%
   set_engine("prophet") %>%
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # Auto-NEURAL PROPHET
 model_fit_auto_nprophet <- neural_prophet() %>%
   set_engine("prophet") %>%
-  fit(optins_trans ~ optin_time, data = training(splits))
+  fit(y ~ ds, data = training(splits))
 
 # NEURAL PROPHET with XREGs
 model_fit_nprophet_xregs <- neural_prophet(
@@ -202,7 +202,7 @@ model_fit_nprophet_xregs <- neural_prophet(
   seasonality_yearly = TRUE
 ) |>
   set_engine("prophet") |>
-  fit(optins_trans ~ optin_time + event, data = training(splits))
+  fit(y ~ ds + promo, data = training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------

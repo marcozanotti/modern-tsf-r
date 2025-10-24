@@ -110,8 +110,8 @@ analytics_tbl |> dplyr::slice(1:50) |> DT::datatable()
 Mailchimp dataset of email subscriptions.
 
 ```{r, echo=FALSE}
-subscribers_tbl <- read_rds("../data/subscribers.rds")
-subscribers_tbl |> dplyr::slice(1:50) |> DT::datatable()
+email_tbl <- read_rds("../data/email.rds")
+email_tbl |> dplyr::slice(1:50) |> DT::datatable()
 ```
 
 ### Events

@@ -1,4 +1,4 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
+# Modern Time Series Forecasting with R ----
 
 # Lecture Extra: Clustering -----------------------------------------------
 # Marco Zanotti

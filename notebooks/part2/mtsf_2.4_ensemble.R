@@ -1,7 +1,7 @@
-# Time Series Forecasting: Machine Learning and Deep Learning with R & Python ----
-
-# Lecture 10: Ensemble Learning -------------------------------------------
+# Modern Time Series Forecasting with R ----
 # Marco Zanotti
+
+# Lecture 2.4: Ensemble Learning -------------------------------------------
 
 # Goals:
 # - Ensemble Learning
@@ -19,14 +19,14 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/packages.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -37,7 +37,7 @@ splits <- time_series_split(data_prep_tbl, assess = "8 weeks", cumulative = TRUE
 
 splits |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 
 # * Recipes ---------------------------------------------------------------
@@ -50,16 +50,14 @@ rcp_spec_lag <- artifacts_list$recipes$rcp_spec_lag
 
 # Models ------------------------------------------------------------------
 
-calibration_ts_tbl <- read_rds("artifacts/calibration_ts.rds")
-calibration_ml_tbl <- read_rds("artifacts/calibration_ml.rds")
-calibration_boost_tbl <- read_rds("artifacts/calibration_boost.rds")
-calibration_tune_tbl <- read_rds("artifacts/calibration_tune.rds")
+calibration_ts_tbl <- read_rds("data/email/artifacts/calibration_ts.rds")
+calibration_ml_tbl <- read_rds("data/email/artifacts/calibration_ml.rds")
+calibration_tune_tbl <- read_rds("data/email/artifacts/calibration_tune.rds")
 
 # combine modeltime tables (calibration removed)
 model_tbl <- combine_modeltime_tables(
   calibration_ts_tbl,
   calibration_ml_tbl,
-  calibration_boost_tbl,
   calibration_tune_tbl
 )
 
@@ -227,14 +225,14 @@ resamples_tscv <- training(splits) |>
   )
 resamples_tscv |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans)
+  plot_time_series_cv_plan(ds, y)
 
 # VFCV
 set.seed(123)
 resamples_vfold <- vfold_cv(training(splits), v = 3)
 resamples_vfold |>
   tk_time_series_cv_plan() |>
-  plot_time_series_cv_plan(optin_time, optins_trans, .facet_ncol = 2)
+  plot_time_series_cv_plan(ds, y, .facet_ncol = 2)
 
 
 # * Resampling ------------------------------------------------------------
