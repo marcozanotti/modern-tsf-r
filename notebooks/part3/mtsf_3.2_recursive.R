@@ -11,7 +11,7 @@
 # Packages ----------------------------------------------------------------
 
 source("src/R/utils.R")
-source("src/R/packages.R")
+source("src/R/install.R")
 
 
 
@@ -22,80 +22,54 @@ source("src/R/packages.R")
 
 
 
-# Data & Artifacts --------------------------------------------------------
+# Data --------------------------------------------------------------------
 
-email_tbl <- load_data("data/email", "email_prep", ext = ".parquet")
-
-
-# * Data Preparation ------------------------------------------------------
-
-email_tbl |> count(member_rating)
-
-# email data by group
-email_tbl <- email_tbl |>
-  rename(id = member_rating) |>
-  mutate(id = ifelse(id == 2, id, 1) |> as.factor()) |>
-  group_by(id) |>
-  summarise_by_time(ds, .by = "day", y = n()) |>
-  pad_by_time(.pad_value = 0)
-
-email_tbl |>
-  plot_time_series(ds, log1p(y), .smooth = FALSE)
-
-email_prep_tbl <- email_tbl |>
-  mutate(y = log_interval_vec(y, limit_lower = 0, offset = 1)) |>
-  mutate(y = standardize_vec(y)) |>
-  filter_by_time(.start_date = "2018-07-05") |>
-  mutate(y_trans_cleaned = ts_clean_vec(y, period = 7)) |>
-  mutate(
-    y = ifelse(
-      ds |> between_time("2018-11-18", "2018-11-20"),
-      y_trans_cleaned,
-      y
-    )
-  ) |>
-  select(-y, -y_trans_cleaned)
-
-email_prep_tbl |>
-  plot_time_series(ds, y, .smooth = FALSE)
-
-# events data
-events_daily_tbl <- events_tbl |>
-  mutate(event_date = ymd_hms(event_date)) |>
-  summarise_by_time(event_date, .by = "day", promo = n())
+m4_tbl <- load_data("data/m4", "m4_prep_sample", ext = ".parquet")
 
 
 # * Feature Engineering ---------------------------------------------------
 
-# - Extend to Future Window
-# - Add any lags to full dataset
-# - Add any external regressors to full dataset
+m4_tbl |> plot_time_series(ds, y, .facet_var = unique_id, .facet_ncol = 2)
 
-horizon <- 7 * 8
-lags <- c(1, 2, 7, 14, 30)
+horizon <- 24 * 2
+lags <- c(1, 2, 6, 12, 24)
+rolling_periods <- c(24, 48)
 
-data_prep_full_tbl <- email_prep_tbl |>
-  future_frame(.data = _, ds, .length_out = horizon, .bind_data = TRUE) |>
-  lag_transf_grouped() |>
-  group_by(id) |>
-  tk_augment_lags(y, .lags = c(horizon, 90)) |>
-  left_join(events_daily_tbl, by = c("ds" = "event_date")) |>
-  mutate(promo = ifelse(is.na(promo), 0, promo))
+data_prep_full_tbl <- m4_tbl |>
+  # Extend each time series
+  extend_timeseries(.id_var = unique_id, .date_var = ds, .length_future = horizon) |>
+  group_by(unique_id) |>
+  # Add lags
+  tk_augment_lags(y, .lags = lag_period) |>
+  # Add rolling features
+  tk_augment_slidify(
+    y_lag24,
+    mean,
+    .period = rolling_periods,
+    .align = "center",
+    .partial = TRUE
+  ) |>
+  tk_augment_fourier(ds, .periods = c(12, 24, 36, 48), .K = 2) |>
+  # Reformat Columns
+  rename_with(.cols = contains("lag"), .fn = ~ str_c("lag_", .)) |>
+  ungroup()
 
 data_prep_full_tbl |>
-  pivot_longer(cols = -c(id, ds)) |>
-  plot_time_series(ds, value, name, .smooth = FALSE)
-data_prep_full_tbl |> slice_tail(n = horizon + 1)
+  select(-matches("(sin)|(cos)")) |>
+  group_by(unique_id) |>
+  pivot_longer(cols = -c(unique_id, ds)) |>
+  plot_time_series(ds, value, .color_var = name, .facet_var = unique_id, .facet_ncol = 2, .smooth = FALSE)
+data_prep_full_tbl |> group_by(unique_id) |> slice_tail(n = horizon + 1)
 
 
 # * Modelling & Forecast Data ---------------------------------------------
 
 data_prep_tbl <- data_prep_full_tbl |>
-  slice_head(n = nrow(data_prep_full_tbl) - horizon) |>
-  drop_na() |>
-  ungroup()
+  drop_na() 
 forecast_tbl <- data_prep_full_tbl |>
-  slice_tail(n = horizon)
+  group_by(unique_id) |>
+  slice_tail(n = horizon) |> 
+  ungroup()
 
 
 # * Train / Test Sets -----------------------------------------------------
@@ -108,14 +82,20 @@ splits |>
 
 # * Recipes ---------------------------------------------------------------
 
-# Recipe with calendar features, short-term and long-term dynamics
-rcp_spec <- recipe(y ~ ., data = training(splits)) |>
+# Baseline Recipe
+# - Time Series Signature - Adds bulk time-based features
+rcp_spec_sf <- recipe(y ~ ., data = training(splits)) |>
+  update_role(unique_id, new_role = "id variable") |>   # make it not a predictor
   step_timeseries_signature(ds) |>
-  step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
-  step_normalize(matches("(index.num)|(year)|(yday)")) |>
-  step_dummy(all_nominal(), one_hot = TRUE) |>
-  step_rm(ds)
-rcp_spec |> prep() |> juice() |> glimpse()
+  step_rm(matches("(iso)|(xts)|(minute)|(second)|(year)|(quarter)|(month)|(half)|(mday)|(qday)|(yday)")) |>
+  step_normalize(matches("(index.num)")) |>
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) |>  # only predictors
+  step_naomit(starts_with("lag_"))
+
+rcp_spec_ml <- rcp_spec_sf |> step_rm(ds)
+
+rcp_spec_sf |> prep() |> juice() |> glimpse()
+rcp_spec_ml |> prep() |> juice() |> glimpse()
 
 
 
@@ -131,18 +111,17 @@ model_spec_knn <- nearest_neighbor(
 ) |>
   set_engine("kknn")
 
-
 # * Workflows -------------------------------------------------------------
 
 # KNN - Recursive
 wrkfl_fit_knn_recursive <- workflow() |>
   add_model(model_spec_knn) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits)) |>
   recursive(
-    id = "id",
+    id = "unique_id",
     transform = lag_transf_grouped,
-    train_tail = panel_tail(training(splits), id, horizon)
+    train_tail = panel_tail(training(splits), unique_id, horizon)
   )
 
 
@@ -159,18 +138,17 @@ model_spec_rf <- rand_forest(
 ) |>
   set_engine("ranger")
 
-
 # * Workflows -------------------------------------------------------------
 
 # RF - Recursive
 wrkfl_fit_rf_recursive <- workflow() |>
   add_model(model_spec_rf) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits)) |>
   recursive(
-    id = "id",
+    id = "unique_id",
     transform = lag_transf_grouped,
-    train_tail = panel_tail(training(splits), id, horizon)
+    train_tail = panel_tail(training(splits), unique_id, horizon)
   )
 
 
@@ -186,18 +164,17 @@ model_spec_cubist <- cubist_rules(
 ) |>
   set_engine("Cubist")
 
-
 # * Workflows -------------------------------------------------------------
 
 # CUBIST - Recursive
 wrkfl_fit_cubist_recursive <- workflow() |>
   add_model(model_spec_cubist) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits)) |>
   recursive(
-    id = "id",
+    id = "unique_id",
     transform = lag_transf_grouped,
-    train_tail = panel_tail(training(splits), id, horizon)
+    train_tail = panel_tail(training(splits), unique_id, horizon)
   )
 
 
@@ -214,18 +191,17 @@ model_spec_nnet <- mlp(
 ) |>
   set_engine("nnet")
 
-
 # * Workflows -------------------------------------------------------------
 
 # NNET - Recursive
 wrkfl_fit_nnet_recursive <- workflow() |>
   add_model(model_spec_nnet) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits)) |>
   recursive(
-    id = "id",
-    transform = lag_transf_grouped,
-    train_tail = panel_tail(training(splits), id, horizon)
+    id = "unique_id",
+    transform = lag_transf_grouped, 
+    train_tail = panel_tail(training(splits), unique_id, horizon)
   )
 
 
@@ -239,23 +215,22 @@ calibration_tbl <- modeltime_table(
   wrkfl_fit_cubist_recursive,
   wrkfl_fit_nnet_recursive
 ) |>
-  modeltime_calibrate(testing(splits), id = "id")
+  modeltime_calibrate(testing(splits), id = "unique_id")
 
 calibration_tbl |>
   modeltime_accuracy(acc_by_id = TRUE) |>
-  arrange(id)
+  arrange(unique_id)
 
 calibration_tbl |>
   modeltime_forecast(new_data = testing(splits), actual_data = data_prep_tbl, keep_data = TRUE) |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue", .facet_ncol = 2)
 
 # * Refitting & Forecasting
-refit_tbl <- calibration_tbl |>
-  modeltime_refit(data = data_prep_tbl)
+refit_tbl <- calibration_tbl |> modeltime_refit(data = data_prep_tbl)
 
 refit_tbl |>
   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl, keep_data = TRUE) |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue", .facet_ncol = 2)
 

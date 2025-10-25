@@ -1,7 +1,7 @@
 # Modern Time Series Forecasting with R ----
-
-# Lecture Extra: Clustering -----------------------------------------------
 # Marco Zanotti
+
+# Lecture E.4: Clustering -----------------------------------------------
 
 # Goals:
 # - Clustering via tsfeatures
@@ -10,16 +10,13 @@
 
 # Packages ----------------------------------------------------------------
 
-library(dplyr)
-library(purrr)
-library(timetk)
-library(tsfeatures)
+install_and_load(c("dplyr", "purrr", "timetk", "tsfeatures"))
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-walmart_sales_weekly
+walmart_sales_weekly # dataset in package tsfeatures
 View(walmart_sales_weekly)
 
 walmart_sales_weekly |> count(id)

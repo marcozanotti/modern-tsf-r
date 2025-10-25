@@ -128,7 +128,7 @@ reticulate::py_config()
 
 # setwd("~/Desktop/RProjects/tsforecasting-course") # sorry for this path
 source("src/R/utils.R")
-source("src/R/packages.R")
+source("src/R/install.R")
 
 
 

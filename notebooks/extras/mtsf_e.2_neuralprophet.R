@@ -1,7 +1,7 @@
 # Modern Time Series Forecasting with R ----
-
-# Lecture 13: Neural Prophet Algorithm ------------------------------------
 # Marco Zanotti
+
+# Lecture E.2: Neural Prophet Algorithm ------------------------------------
 
 # Goals:
 # - learn how to use the Neural version of Prophet
@@ -107,15 +107,14 @@ Sys.getenv("NPROPHET_PYTHON")
 library(neuralprophet)
 reticulate::py_config()
 
-# setwd("~/Desktop/RProjects/tsforecasting-course") # sorry for this path
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/install.R")
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -255,5 +254,4 @@ refit_tbl <- calibration_tbl |>
 refit_tbl |>
   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
   plot_modeltime_forecast(.conf_interval_fill = "lightblue")
-
 

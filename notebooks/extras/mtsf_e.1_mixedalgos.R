@@ -1,7 +1,8 @@
 # Modern Time Series Forecasting with R ----
-
-# Lecture 6: Boosted Time Series Algorithms -------------------------------
 # Marco Zanotti
+
+# Lecture E.1: Mixed Algorithms -------------------------------
+
 
 # Goals:
 # - Understand Boosting Errors
@@ -14,17 +15,17 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/install.R")
 
-# devtools::install_github("AlbertoAlmuinha/boostime")
+devtools::install_github("AlbertoAlmuinha/boostime")
 library(boostime)
 
 
 
 # Data & Artifacts --------------------------------------------------------
 
-artifacts_list <- read_rds("artifacts/feature_engineering_artifacts_list.rds")
+artifacts_list <- read_rds("data/email/artifacts/feature_engineering_artifacts_list.rds")
 data_prep_tbl <- artifacts_list$data$data_prep_tbl
 forecast_tbl <- artifacts_list$data$forecast_tbl
 
@@ -39,10 +40,7 @@ splits |>
 
 # * Recipes ---------------------------------------------------------------
 
-rcp_spec_fourier <- recipe(
-  y ~ ds + .,
-  data = training(splits)
-) |>
+rcp_spec_fourier <- recipe(y ~ ds + ., data = training(splits)) |>
   step_fourier(ds, period = c(7, 14, 30, 90), K = 1)
 # recipe for the ARIMA model
 
@@ -152,8 +150,8 @@ calibrate_evaluate_plot(
 
 # ARIMA LIGHT GBM ---------------------------------------------------------
 
+# FIXME: bug in LGBM
 ?boost_arima()
-# does not work now, there is a bug
 
 
 # * Engines ---------------------------------------------------------------
@@ -192,26 +190,26 @@ model_spec_auto_arima_lgbm <- boost_arima(
 # * Workflows -------------------------------------------------------------
 
 # ARIMA with Light GBM + base recipe
-# set.seed(123)
-# wrkfl_fit_arima_lgbm <- workflow() |>
-#   add_model(model_spec_arima_lgbm) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
+set.seed(123)
+wrkfl_fit_arima_lgbm <- workflow() |>
+  add_model(model_spec_arima_lgbm) |>
+  add_recipe(rcp_spec) |>
+  fit(training(splits))
 
 # Auto-ARIMA with Light GBM + base recipe
-# set.seed(123)
-# wrkfl_fit_auto_arima_lgbm <- workflow() |>
-#   add_model(model_spec_auto_arima_lgbm) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
+set.seed(123)
+wrkfl_fit_auto_arima_lgbm <- workflow() |>
+  add_model(model_spec_auto_arima_lgbm) |>
+  add_recipe(rcp_spec) |>
+  fit(training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
 
-# calibrate_evaluate_plot(
-#   wrkfl_fit_arima_lgbm,
-#   wrkfl_fit_auto_arima_lgbm
-# )
+calibrate_evaluate_plot(
+  wrkfl_fit_arima_lgbm,
+  wrkfl_fit_auto_arima_lgbm
+)
 
 
 
@@ -256,26 +254,26 @@ model_spec_auto_arima_catboost <- boost_arima(
 # * Workflows -------------------------------------------------------------
 
 # ARIMA with CAT Boost + base recipe
-# set.seed(123)
-# wrkfl_fit_arima_catboost <- workflow() |>
-#   add_model(model_spec_arima_catboost) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
+set.seed(123)
+wrkfl_fit_arima_catboost <- workflow() |>
+  add_model(model_spec_arima_catboost) |>
+  add_recipe(rcp_spec) |>
+  fit(training(splits))
 
 # Auto-ARIMA with CAT Boost + base recipe
-# set.seed(123)
-# wrkfl_fit_auto_arima_catboost <- workflow() |>
-#   add_model(model_spec_auto_arima_catboost) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
+set.seed(123)
+wrkfl_fit_auto_arima_catboost <- workflow() |>
+  add_model(model_spec_auto_arima_catboost) |>
+  add_recipe(rcp_spec) |>
+  fit(training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
 
-# calibrate_evaluate_plot(
-#   wrkfl_fit_arima_catboost,
-#   wrkfl_fit_auto_arima_catboost
-# )
+calibrate_evaluate_plot(
+  wrkfl_fit_arima_catboost,
+  wrkfl_fit_auto_arima_catboost
+)
 
 
 
@@ -337,8 +335,9 @@ calibrate_evaluate_plot(
 
 # PROPHET LIGHT GBM -------------------------------------------------------
 
+# FIXME: bug in LGBM
 ?boost_prophet()
-# does not work, there is a bug
+
 
 
 # * Engines ---------------------------------------------------------------
@@ -365,16 +364,16 @@ model_spec_prophet_lgbm <- boost_prophet(
 # * Workflows -------------------------------------------------------------
 
 # PROPHET with Light GBM + base recipe
-# set.seed(123)
-# wrkfl_fit_prophet_lgbm <- workflow() |>
-#   add_model(model_spec_prophet_lgbm) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
+set.seed(123)
+wrkfl_fit_prophet_lgbm <- workflow() |>
+  add_model(model_spec_prophet_lgbm) |>
+  add_recipe(rcp_spec) |>
+  fit(training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
 
-# calibrate_evaluate_plot(wrkfl_fit_prophet_lgbm)
+calibrate_evaluate_plot(wrkfl_fit_prophet_lgbm)
 
 
 
@@ -407,16 +406,16 @@ model_spec_prophet_catboost <- boost_prophet(
 # * Workflows -------------------------------------------------------------
 
 # PROPHET with CAT Boost + base recipe
-# set.seed(123)
-# wrkfl_fit_prophet_catboost <- workflow() |>
-#   add_model(model_spec_prophet_catboost) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
+set.seed(123)
+wrkfl_fit_prophet_catboost <- workflow() |>
+  add_model(model_spec_prophet_catboost) |>
+  add_recipe(rcp_spec) |>
+  fit(training(splits))
 
 
 # * Calibration, Evaluation & Plotting ------------------------------------
 
-# calibrate_evaluate_plot(wrkfl_fit_prophet_catboost)
+calibrate_evaluate_plot(wrkfl_fit_prophet_catboost)
 
 
 
@@ -432,12 +431,12 @@ calibration_tbl <- modeltime_table(
   wrkfl_fit_auto_arima_xgb,
   # wrkfl_fit_arima_lgbm,
   # wrkfl_fit_auto_arima_lgbm,
-  # wrkfl_fit_arima_catboost,
-  # wrkfl_fit_auto_arima_catboost,
+  wrkfl_fit_arima_catboost,
+  wrkfl_fit_auto_arima_catboost,
   model_fit_prophet_xregs,
-  wrkfl_fit_prophet_xgb
+  wrkfl_fit_prophet_xgb,
   # wrkfl_fit_prophet_lgbm,
-  # wrkfl_fit_prophet_catboost
+  wrkfl_fit_prophet_catboost
   ) |>
   modeltime_calibrate(testing(splits))
 
@@ -463,11 +462,4 @@ refit_tbl <- calibration_tbl |>
 refit_tbl |>
   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl) |>
   plot_modeltime_forecast(.conf_interval_fill = "lightblue")
-
-
-# * Save Artifacts --------------------------------------------------------
-
-calibration_tbl |>
-  filter(str_detect(.model_desc, "BOOST")) |>
-  write_rds("artifacts/calibration_boost.rds")
 

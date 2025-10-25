@@ -22,7 +22,7 @@
 # Packages ----------------------------------------------------------------
 
 source("src/R/utils.R")
-source("src/R/packages.R")
+source("src/R/install.R")
 
 
 

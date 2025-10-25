@@ -290,7 +290,6 @@ calibrate_evaluate_plot <- function(..., type = "testing", updated_desc = NULL) 
 
 }
 
-
 # Function to extract the .model_id of the "best" model according to a metric
 select_best_id <- function(calibration, n = 1, metric = "rmse", by_id = FALSE, id_var = NULL) {
 
@@ -307,18 +306,24 @@ select_best_id <- function(calibration, n = 1, metric = "rmse", by_id = FALSE, i
 
   if (metric == "rsq") {
     model_best_id <- model_best_id %>%
-      slice_max(!!rlang::sym(metric), n = n) %>%
-      pull(.model_id)
+      slice_max(!!rlang::sym(metric), n = n)
   } else {
     model_best_id <- model_best_id %>%
-      slice_min(!!rlang::sym(metric), n = n) %>%
+      slice_min(!!rlang::sym(metric), n = n)
+  }
+
+  if (by_id) {
+    model_best_id <- model_best_id %>%
+      select(.model_id, unique_id) %>%
+      ungroup()
+  } else {
+    model_best_id <- model_best_id %>%
       pull(.model_id)
   }
 
   return(model_best_id)
 
 }
-
 
 # Function to add lags
 lag_transf <- function(data){
@@ -327,16 +332,14 @@ lag_transf <- function(data){
   return(data_lags)
 }
 
-
 # Function to add lags by group
 lag_transf_grouped <- function(data){
   data_lags <- data %>%
-    group_by(id) %>%
+    group_by(unique_id) %>%
     tk_augment_lags(y, .lags = lags) %>%
     ungroup()
   return(data_lags)
 }
-
 
 # Function to calibrate models, evaluate their accuracy and plot results on nested data
 nested_calibrate_evaluate_plot <- function(nested_data, workflows, id_var, parallel = FALSE) {
@@ -344,10 +347,7 @@ nested_calibrate_evaluate_plot <- function(nested_data, workflows, id_var, paral
   nested_calibration_tbl <- nested_data %>%
     modeltime_nested_fit(
       model_list = workflows,
-      control = control_nested_fit(
-        verbose   = TRUE,
-        allow_par = parallel
-      )
+      control = control_nested_fit(verbose = TRUE, allow_par = parallel)
     )
 
   print(nested_calibration_tbl %>% extract_nested_test_accuracy())
@@ -356,13 +356,12 @@ nested_calibrate_evaluate_plot <- function(nested_data, workflows, id_var, paral
     nested_calibration_tbl %>%
       extract_nested_test_forecast() %>%
       group_by(!!rlang::sym(id_var)) %>%
-      plot_modeltime_forecast(.conf_interval_show = FALSE)
+      plot_modeltime_forecast(.conf_interval_show = FALSE, .facet_ncol = 2)
   )
 
   return(invisible(nested_calibration_tbl))
 
 }
-
 
 # Function to convert back to original scale
 std_logint_inv_vec <- function(x, mean, sd, limit_lower, limit_upper, offset) {

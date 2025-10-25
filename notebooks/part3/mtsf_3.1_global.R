@@ -14,92 +14,55 @@
 # Packages ----------------------------------------------------------------
 
 source("src/R/utils.R")
-source("src/R/packages.R")
+source("src/R/install.R")
 
 
-# Data & Artifacts --------------------------------------------------------
+# Data --------------------------------------------------------------------
 
 m4_tbl <- load_data("data/m4", "m4_prep_sample", ext = ".parquet")
 
-
-
-# Data Preparation --------------------------------------------------------
-
-
-
-# email data by group
-email_tbl <- email_tbl |>
-  rename(id = member_rating) |>
-  mutate(id = ifelse(id == 2, id, 1) |> as.factor()) |>
-  group_by(id) |>
-  summarise_by_time(ds, .by = "day", y = n()) |>
-  pad_by_time(.pad_value = 0)
-
-email_tbl |>
-  plot_time_series(ds, log1p(y), .smooth = FALSE)
-
-email_prep_tbl <- email_tbl |>
-  mutate(y = log_interval_vec(y, limit_lower = 0, offset = 1)) |>
-  mutate(y = standardize_vec(y)) |>
-  filter_by_time(.start_date = "2018-07-05", .end_date = "2020-02-29") |>
-  mutate(y_trans_cleaned = ts_clean_vec(y, period = 7)) |>
-  mutate(
-    y = ifelse(
-      ds |> between_time("2018-11-18", "2018-11-20"),
-      y_trans_cleaned,
-      y
-    )
-  ) |>
-  select(-y, -y_trans_cleaned)
-
-email_prep_tbl |>
-  plot_time_series(ds, y, .smooth = FALSE)
-
-
-
-# NESTED FORECASTING ------------------------------------------------------
-# Modeltime Nested Data Workflow ------------------------------------------
 
 # * Feature Engineering ---------------------------------------------------
 
 ?extend_timeseries
 
-horizon <- 7 * 8
-lag_period <- 7 * 8
-rolling_periods <- c(30, 60, 90)
+m4_tbl |> plot_time_series(ds, y, .facet_var = unique_id, .facet_ncol = 2)
 
-data_prep_full_tbl <- email_prep_tbl |>
+horizon <- 24 * 2
+lag_period <- 24 * 2
+rolling_periods <- c(24, 48, 96)
+
+data_prep_full_tbl <- m4_tbl |>
   # Extend each time series
-  # future_frame(.data = ., ds, .length_out = horizon, .bind_data = TRUE) |>
-  extend_timeseries(
-    .id_var = id,
-    .date_var = ds,
-    .length_future = horizon
-  ) |>
-  group_by(id) |>
+  extend_timeseries(.id_var = unique_id, .date_var = ds, .length_future = horizon) |>
+  group_by(unique_id) |>
   # Add lags
   tk_augment_lags(y, .lags = lag_period) |>
   # Add rolling features
   tk_augment_slidify(
-    y_trans_lag56,
+    y_lag48,
     mean,
     .period = rolling_periods,
     .align = "center",
     .partial = TRUE
   ) |>
-  # Add Events
-  left_join(events_daily_tbl, by = c("ds" = "event_date")) |>
-  mutate(promo = ifelse(is.na(promo), 0, promo)) |>
+  tk_augment_fourier(ds, .periods = c(12, 24, 36, 48), .K = 2) |>
   # Reformat Columns
   rename_with(.cols = contains("lag"), .fn = ~ str_c("lag_", .)) |>
   ungroup()
 
 data_prep_full_tbl |>
-  group_by(id) |>
-  pivot_longer(cols = -c(id, ds)) |>
-  plot_time_series(ds, value, name, .smooth = FALSE)
-data_prep_full_tbl |> group_by(id) |> slice_tail(n = horizon + 1)
+  select(-matches("(sin)|(cos)")) |>
+  group_by(unique_id) |>
+  pivot_longer(cols = -c(unique_id, ds)) |>
+  plot_time_series(ds, value, .color_var = name, .facet_var = unique_id, .facet_ncol = 2, .smooth = FALSE)
+data_prep_full_tbl |> group_by(unique_id) |> slice_tail(n = horizon + 1)
 
+
+
+# NESTED FORECASTING ------------------------------------------------------
+
+# Modeltime Nested Data Workflow ------------------------------------------
 
 # * Modelling & Forecast Data ---------------------------------------------
 
@@ -107,7 +70,7 @@ data_prep_full_tbl |> group_by(id) |> slice_tail(n = horizon + 1)
 
 nested_data_tbl <- data_prep_full_tbl |>
   # Split into actual data & forecast data
-  nest_timeseries(.id_var = id, .length_future = horizon)
+  nest_timeseries(.id_var = unique_id, .length_future = horizon)
 
 # from now on, we will work with list columns (that is nested data)
 
@@ -130,37 +93,17 @@ extract_nested_test_split(nested_data_tbl, .row_id = 1)
 
 # Baseline Recipe
 # - Time Series Signature - Adds bulk time-based features
-# - Interaction: wday.lbl:week2
-# - Fourier Features
-rcp_spec <-
-  # recipe(y ~ ., data = training(splits)) |>
-  recipe(y ~ ., data = extract_nested_train_split(nested_data_tbl)) |>
-  # Time Series Signature
+rcp_spec_sf <- recipe(y ~ ., data = extract_nested_train_split(nested_data_tbl)) |>
   step_timeseries_signature(ds) |>
-  step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
-  step_normalize(matches("(index.num)|(year)|(yday)")) |>
+  step_rm(matches("(iso)|(xts)|(minute)|(second)|(year)|(quarter)|(month)|(half)|(mday)|(qday)|(yday)")) |>
+  step_normalize(matches("(index.num)")) |>
   step_dummy(all_nominal(), one_hot = TRUE) |>
-  # Interaction
-  step_interact(~ matches("week2") * matches("wday.lbl")) |>
-  # Fourier
-  step_fourier(ds, period = c(7, 14, 30, 90, 365), K = 2)
-rcp_spec |> prep() |> juice() |> glimpse()
+  step_naomit(starts_with("lag_")) 
 
-# Spline Recipe
-# - natural spline series on index.num
-rcp_spec_spline <- rcp_spec |>
-  step_ns(ends_with("index.num"), deg_free = 2) |>
-  step_rm(ds) |>
-  step_rm(starts_with("lag_"))
-rcp_spec_spline |> prep() |> juice() |> glimpse()
+rcp_spec_ml <- rcp_spec_sf |> step_rm(ds)
 
-# Lag Recipe
-# - lags of y and rolls
-rcp_spec_lag <- rcp_spec |>
-  step_naomit(starts_with("lag_")) |>
-  step_rm(ds)
-rcp_spec_lag |> prep() |> juice() |> glimpse()
-
+rcp_spec_sf |> prep() |> juice() |> glimpse()
+rcp_spec_ml |> prep() |> juice() |> glimpse()
 
 
 # Modeltime Nested Modelling Workflow -------------------------------------
@@ -168,25 +111,15 @@ rcp_spec_lag |> prep() |> juice() |> glimpse()
 ?linear_reg()
 # - Baseline model for ML
 
-
 # * Engines ---------------------------------------------------------------
 
-model_spec_lm <- linear_reg() |>
-  set_engine("lm")
-
+model_spec_lm <- linear_reg() |> set_engine("lm")
 
 # * Workflows -------------------------------------------------------------
 
-# LM + Splines
-wrkfl_fit_lm_spline <- workflow() |>
+wrkfl_fit_lm <- workflow() |>
   add_model(model_spec_lm) |>
-  add_recipe(rcp_spec_spline)
-
-# LM + Lags
-wrkfl_fit_lm_lag <- workflow() |>
-  add_model(model_spec_lm) |>
-  add_recipe(rcp_spec_lag)
-
+  add_recipe(rcp_spec_ml)
 
 # * Calibration -----------------------------------------------------------
 
@@ -195,19 +128,11 @@ wrkfl_fit_lm_lag <- workflow() |>
 
 nested_modeltime_tbl <- nested_data_tbl |>
   modeltime_nested_fit(
-    model_list = list(
-      wrkfl_fit_lm_spline,
-      wrkfl_fit_lm_lag
-    ),
-    control = control_nested_fit(
-      verbose = TRUE,
-      allow_par = FALSE
-    )
+    model_list = list(wrkfl_fit_lm),
+    control = control_nested_fit(verbose = TRUE, allow_par = FALSE)
   )
 
-nested_modeltime_tbl
-# nested modeltime tables
-
+nested_modeltime_tbl # nested modeltime tables
 
 # * Evaluation ------------------------------------------------------------
 
@@ -223,23 +148,19 @@ nested_modeltime_tbl |>
 # Plotting
 nested_modeltime_tbl |>
   extract_nested_test_forecast() |>
-  group_by(id) |>
-  plot_modeltime_forecast()
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.facet_ncol = 2)
 
 # Error reporting
-nested_modeltime_tbl |>
-  extract_nested_error_report()
+nested_modeltime_tbl |> extract_nested_error_report()
 
-
-# Helper function to quickly calibrate, evaluate and plot
-# (to use only with few time series)
+# Helper function to quickly calibrate, evaluate and plot (to use only with few time series)
 nested_calibrate_evaluate_plot(
   nested_data_tbl,
-  workflows = list(wrkfl_fit_lm_spline, wrkfl_fit_lm_lag),
-  id_var = "id",
+  workflows = list(wrkfl_fit_lm),
+  id_var = "unique_id",
   parallel = FALSE
 )
-
 
 # * Refitting -------------------------------------------------------------
 
@@ -252,76 +173,32 @@ nested_modeltime_best_tbl <- nested_modeltime_tbl |>
 # refit_tbl <- calibration_tbl |>
 #   modeltime_refit(data = data_prep_tbl)
 nested_best_refit_tbl <- nested_modeltime_best_tbl |>
-  modeltime_nested_refit(
-    control = control_refit(
-      verbose = TRUE,
-      allow_par = FALSE
-    )
-  )
+  modeltime_nested_refit(control = control_refit(verbose = TRUE, allow_par = FALSE))
 
 # Error reporting
 nested_best_refit_tbl |> extract_nested_error_report()
-
 
 # * Forecasting -----------------------------------------------------------
 
 ?modeltime_nested_forecast
 ?extract_nested_future_forecast
 
-# refit_tbl |>
-#   modeltime_forecast(
-#     # h = "16 weeks",
-#     new_data = forecast_tbl,
-#     actual_data = data_prep_tbl,
-#     conf_interval = .8
-#   ) |>
-#   plot_modeltime_forecast(.conf_interval_fill = "lightblue" )
-
-nested_best_refit_tbl |>
-  extract_nested_future_forecast()
+nested_best_refit_tbl |> extract_nested_future_forecast()
 
 nested_forecast_tbl <- nested_best_refit_tbl |>
   modeltime_nested_forecast(
-    control = control_nested_forecast(
-      verbose   = TRUE,
-      allow_par = FALSE
-    )
+    control = control_nested_forecast(verbose = TRUE, allow_par = FALSE)
   )
 
 nested_forecast_tbl |>
-  group_by(id) |>
-  plot_modeltime_forecast()
-# problem with refitting of LM models
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.facet_ncol = 2)
 
 
 
 # Nested Multiple Models Workflow -----------------------------------------
 
 # Engines & Workflows -----------------------------------------------------
-# * ARIMA XGBOOST ---------------------------------------------------------
-
-# Auto-ARIMA with XGBoost
-model_spec_auto_arima_xgb <- arima_boost(
-  # Auto-ARIMA params
-  seasonal_period = "auto",
-  # XGBOOST params
-  mtry = 0.75,
-  min_n = 20,
-  tree_depth = 3,
-  learn_rate = 0.25,
-  loss_reduction = 0.15,
-  trees = 300
-) |>
-  set_engine(
-    "auto_arima_xgboost",
-    counts = FALSE # painful to discover, explain why! (mtry as counts)
-  )
-
-set.seed(123)
-wrkfl_fit_auto_arima_xgb <- workflow() |>
-  add_model(model_spec_auto_arima_xgb) |>
-  add_recipe(rcp_spec |> step_rm(starts_with("lag")))
-
 
 # * PROPHET XGBOOST -------------------------------------------------------
 
@@ -349,12 +226,10 @@ model_spec_prophet_xgb <- prophet_boost(
 set.seed(123)
 wrkfl_fit_prophet_xgb <- workflow() |>
   add_model(model_spec_prophet_xgb) |>
-  add_recipe(rcp_spec |> step_rm(starts_with("lag")))
-
+  add_recipe(rcp_spec_sf |> step_rm(starts_with("lag")))
 
 # * RANDOM FOREST ---------------------------------------------------------
 
-# RF
 model_spec_rf <- rand_forest(
   mode = "regression",
   mtry = 25,
@@ -363,20 +238,13 @@ model_spec_rf <- rand_forest(
 ) |>
   set_engine("ranger")
 
-set.seed(123) # RF + Splines
-wrkfl_fit_rf_spline <- workflow() |>
+set.seed(123)
+wrkfl_fit_rf <- workflow() |>
   add_model(model_spec_rf) |>
-  add_recipe(rcp_spec_spline)
-
-set.seed(123) # RF + Lags
-wrkfl_fit_rf_lag <- workflow() |>
-  add_model(model_spec_rf) |>
-  add_recipe(rcp_spec_lag)
-
+  add_recipe(rcp_spec_ml)
 
 # * NEURAL NETWORK --------------------------------------------------------
 
-# NNETAR
 model_spec_nnetar <- nnetar_reg(
   non_seasonal_ar = 2,
   seasonal_ar = 1,
@@ -390,7 +258,7 @@ model_spec_nnetar <- nnetar_reg(
 set.seed(123)
 wrkfl_fit_nnetar <- workflow() |>
   add_model(model_spec_nnetar) |>
-  add_recipe(rcp_spec)
+  add_recipe(rcp_spec_sf |> step_rm(starts_with("lag")))
 
 
 # Calibration, Evaluation & Plotting --------------------------------------
@@ -405,16 +273,11 @@ set.seed(123)
 nested_modeltime_tbl <- nested_data_tbl |>
   modeltime_nested_fit(
     model_list = list(
-      wrkfl_fit_auto_arima_xgb,
       wrkfl_fit_prophet_xgb,
-      wrkfl_fit_rf_spline,
-      wrkfl_fit_rf_lag,
+      wrkfl_fit_rf,
       wrkfl_fit_nnetar
     ),
-    control = control_nested_fit(
-      verbose = TRUE,
-      allow_par = TRUE
-    )
+    control = control_nested_fit(verbose = TRUE, allow_par = TRUE)
   )
 
 parallel_stop()
@@ -428,12 +291,11 @@ nested_modeltime_tbl |>
 # Plotting
 nested_modeltime_tbl |>
   extract_nested_test_forecast() |>
-  group_by(id) |>
-  plot_modeltime_forecast()
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.facet_ncol = 2)
 
 # Error reporting
-nested_modeltime_tbl |>
-  extract_nested_error_report()
+nested_modeltime_tbl |> extract_nested_error_report()
 
 
 # Refitting & Forecasting -------------------------------------------------
@@ -447,10 +309,7 @@ parallel_start(parallelly::availableCores())
 # Refitting
 nested_best_refit_tbl <- nested_modeltime_best_tbl |>
   modeltime_nested_refit(
-    control = control_refit(
-      verbose = TRUE,
-      allow_par = TRUE
-    )
+    control = control_refit(verbose = TRUE, allow_par = TRUE)
   )
 
 parallel_stop()
@@ -461,50 +320,23 @@ nested_best_refit_tbl |> extract_nested_error_report()
 # Forecasting
 nested_forecast_tbl <- nested_best_refit_tbl |>
   modeltime_nested_forecast(
-    control = control_nested_forecast(
-      verbose   = TRUE,
-      allow_par = FALSE
-    )
+    control = control_nested_forecast(verbose = TRUE, allow_par = FALSE)
   )
 
 nested_forecast_tbl |>
-  group_by(id) |>
-  plot_modeltime_forecast()
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.facet_ncol = 2)
 
 
 
 # GLOBAL MODELLING --------------------------------------------------------
+
 # Modeltime Global Data Workflow ------------------------------------------
-
-# * Feature Engineering ---------------------------------------------------
-
-email_prep_tbl |>
-  plot_time_series(ds, y, .smooth = FALSE)
-
-horizon <- 7 * 8
-
-data_prep_full_tbl <- email_prep_tbl |>
-  group_by(id) |>
-  future_frame(.data = _, ds, .length_out = horizon, .bind_data = TRUE) |>
-  # Add Events
-  left_join(events_daily_tbl, by = c("ds" = "event_date")) |>
-  mutate(promo = ifelse(is.na(promo), 0, promo)) |>
-  ungroup()
-
-data_prep_full_tbl |>
-  group_by(id) |>
-  pivot_longer(cols = -c(id, ds)) |>
-  plot_time_series(ds, value, name, .smooth = FALSE)
-data_prep_full_tbl |> group_by(id) |> slice_tail(n = horizon + 1)
-
 
 # * Modelling & Forecast Data ---------------------------------------------
 
-data_prep_tbl <- data_prep_full_tbl |>
-  drop_na()
-forecast_tbl <- data_prep_full_tbl |>
-  filter(is.na(y))
-
+data_prep_tbl <- data_prep_full_tbl |> drop_na()
+forecast_tbl <- data_prep_full_tbl |> filter(is.na(y))
 
 # * Train / Test Sets -----------------------------------------------------
 
@@ -513,18 +345,22 @@ splits |>
   tk_time_series_cv_plan() |>
   plot_time_series_cv_plan(ds, y)
 
-
 # * Recipes ---------------------------------------------------------------
 
-rcp_spec <- recipe(y ~ ., data = training(splits)) |>
-  update_role(id, new_role = "id") |>
-  step_mutate_at(id, fn = droplevels) |>
+# Baseline Recipe
+# - Time Series Signature - Adds bulk time-based features
+rcp_spec_sf <- recipe(y ~ ., data = training(splits)) |>
+  update_role(unique_id, new_role = "id variable") |>   # make it not a predictor
   step_timeseries_signature(ds) |>
-  step_rm(matches("(iso)|(xts)|(hour)|(minute)|(second)|(am.pm)")) |>
-  step_normalize(matches("(index.num)|(year)|(yday)")) |>
-  step_dummy(all_nominal(), one_hot = TRUE) |>
-  step_rm(ds)
-rcp_spec |> prep() |> juice() |> glimpse()
+  step_rm(matches("(iso)|(xts)|(minute)|(second)|(year)|(quarter)|(month)|(half)|(mday)|(qday)|(yday)")) |>
+  step_normalize(matches("(index.num)")) |>
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) |>  # only predictors
+  step_naomit(starts_with("lag_"))
+
+rcp_spec_ml <- rcp_spec_sf |> step_rm(ds)
+
+rcp_spec_sf |> prep() |> juice() |> glimpse()
+rcp_spec_ml |> prep() |> juice() |> glimpse()
 
 
 
@@ -533,61 +369,52 @@ rcp_spec |> prep() |> juice() |> glimpse()
 ?linear_reg()
 # - Baseline model for ML
 
-
 # * Engines ---------------------------------------------------------------
 
-model_spec_lm <- linear_reg() |>
-  set_engine("lm")
-
+model_spec_lm <- linear_reg() |> set_engine("lm")
 
 # * Workflows -------------------------------------------------------------
 
 wrkfl_fit_lm <- workflow() |>
   add_model(model_spec_lm) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits))
-
 
 # * Calibration -----------------------------------------------------------
 
 calibration_tbl <- modeltime_table(wrkfl_fit_lm) |>
-  modeltime_calibrate(testing(splits), id = "id")
-
+  modeltime_calibrate(testing(splits), id = "unique_id")
 
 # * Evaluation ------------------------------------------------------------
 
 # Global accuracy
-calibration_tbl |>
-  modeltime_accuracy()
+calibration_tbl |> modeltime_accuracy()
 
 # Local accuracy
-calibration_tbl |>
-  modeltime_accuracy(acc_by_id = TRUE)
+calibration_tbl |> modeltime_accuracy(acc_by_id = TRUE)
 
 calibration_tbl |>
   modeltime_forecast(new_data = testing(splits), actual_data = data_prep_tbl, conf_by_id = TRUE) |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
-
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue", .facet_ncol = 2)
 
 # * Refitting -------------------------------------------------------------
 
-refit_tbl <- calibration_tbl |>
-  modeltime_refit(data = data_prep_tbl)
-
+refit_tbl <- calibration_tbl |> modeltime_refit(data = data_prep_tbl)
 
 # * Forecasting -----------------------------------------------------------
 
 refit_tbl |>
   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl, conf_by_id  = TRUE) |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
-# problem with refitting linear models
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue", .facet_ncol = 2)
+
 
 
 # Global Multiple Models Workflow -----------------------------------------
 
 # Engines & Workflows -----------------------------------------------------
+
 # * ELASTIC NET -----------------------------------------------------------
 
 model_spec_elanet <- linear_reg(
@@ -599,9 +426,8 @@ model_spec_elanet <- linear_reg(
 
 wrkfl_fit_elanet <- workflow() |>
   add_model(model_spec_elanet) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits))
-
 
 # * SVM -------------------------------------------------------------------
 
@@ -616,9 +442,8 @@ model_spec_svm_rbf <- svm_rbf(
 set.seed(123)
 wrkfl_fit_svm_rbf <- workflow() |>
   add_model(model_spec_svm_rbf) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits))
-
 
 # * BOOSTING --------------------------------------------------------------
 
@@ -637,28 +462,8 @@ model_spec_xgb <- boost_tree(
 set.seed(123)
 wrkfl_fit_xgb <- workflow() |>
   add_model(model_spec_xgb) |>
-  add_recipe(rcp_spec) |>
+  add_recipe(rcp_spec_ml) |>
   fit(training(splits))
-
-# LIGHT GBM
-model_spec_lightgbm <- boost_tree(mode = "regression") |>
-  set_engine("lightgbm")
-
-set.seed(123)
-wrkfl_fit_lightgbm <- workflow() |>
-  add_model(model_spec_lightgbm) |>
-  add_recipe(rcp_spec) |>
-  fit(training(splits))
-
-# CAT BOOST
-# model_spec_catboost <- boost_tree(mode = "regression") |>
-#   set_engine("catboost")
-
-# set.seed(123)
-# wrkfl_fit_catboost <- workflow() |>
-#   add_model(model_spec_catboost) |>
-#   add_recipe(rcp_spec) |>
-#   fit(training(splits))
 
 
 # Calibration, Evaluation & Plotting --------------------------------------
@@ -667,32 +472,28 @@ calibration_tbl <- modeltime_table(
   wrkfl_fit_lm,
   wrkfl_fit_elanet,
   wrkfl_fit_svm_rbf,
-  wrkfl_fit_xgb#,
-  # wrkfl_fit_lightgbm
-  # wrkfl_fit_catboost
+  wrkfl_fit_xgb
 ) |>
-  modeltime_calibrate(testing(splits), id = "id")
+  modeltime_calibrate(testing(splits), id = "unique_id")
 
 # Global accuracy
-calibration_tbl |>
-  modeltime_accuracy()
+calibration_tbl |> modeltime_accuracy()
 
 # Local accuracy
 calibration_tbl |>
   modeltime_accuracy(acc_by_id = TRUE) |>
-  arrange(id)
+  arrange(unique_id)
 
 calibration_tbl |>
   modeltime_forecast(new_data = testing(splits), actual_data = data_prep_tbl, conf_by_id = TRUE) |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_show = FALSE)
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_show = FALSE, .facet_ncol = 2)
 
 
 # Refitting & Forecasting -------------------------------------------------
 
 # Select Best Global Model
-global_model_best <- calibration_tbl |>
-  select_best_id(n = 1, metric = "rmse")
+global_model_best <- calibration_tbl |> select_best_id(n = 1, metric = "rmse")
 
 refit_global_tbl <- calibration_tbl |>
   filter(.model_id %in% global_model_best) |>
@@ -700,31 +501,34 @@ refit_global_tbl <- calibration_tbl |>
 
 refit_global_tbl |>
   modeltime_forecast(new_data = forecast_tbl, actual_data = data_prep_tbl, conf_by_id  = TRUE) |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue", .facet_ncol = 2)
 
 
 # Select Best Local Models
 local_models_best <- calibration_tbl |>
-  select_best_id(n = 1, metric = "rmse", by_id = TRUE, id_var = "id")
+  select_best_id(n = 1, metric = "rmse", by_id = TRUE, id_var = "unique_id")
 
 refit_local_tbl <- calibration_tbl |>
-  filter(.model_id %in% local_models_best) |>
+  filter(.model_id %in% local_models_best[[".model_id"]]) |>
   modeltime_refit(data = data_prep_tbl)
 
-forecast_local_tbl <- vector("list", length(local_models_best))
-for (ts_id in as.numeric(unique(data_prep_tbl$id))) {
-  forecast_local_tbl[[ts_id]] <- refit_local_tbl |>
-    filter(.model_id == local_models_best[ts_id]) |>
+ts_ids <- local_models_best[["unique_id"]]
+forecast_local_tbl <- vector("list", length(ids))
+for (i in seq_along(ts_ids)) {
+  ts_id <- ts_ids[i]
+  model_id <- local_models_best |> filter(unique_id == ts_id) |> pull(.model_id)
+  forecast_local_tbl[[i]] <- refit_local_tbl |>
+    filter(.model_id == model_id) |>
     modeltime_forecast(
-      new_data = forecast_tbl |> filter(id == ts_id),
-      actual_data = data_prep_tbl |> filter(id == ts_id),
+      new_data = forecast_tbl |> filter(unique_id == ts_id),
+      actual_data = data_prep_tbl |> filter(unique_id == ts_id),
       conf_by_id  = TRUE
     )
 }
 forecast_local_tbl <- bind_rows(forecast_local_tbl)
 
 forecast_local_tbl |>
-  group_by(id) |>
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+  group_by(unique_id) |>
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue", .facet_ncol = 2)
 

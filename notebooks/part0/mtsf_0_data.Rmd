@@ -1,8 +1,7 @@
 ---
 title: |
-  | Time Series Forecasting: 
-  | Machine Learning and Deep Learning with R and Python 
-  | Lecture 0: Packages & Data
+  | Modern Time Series Forecasting with R
+  | Packages & Datasets
 author: "Marco Zanotti"
 date: ""
 output: 
@@ -13,80 +12,61 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+source("../../src/R/utils.R")
+library(tidyverse)
+library(timetk)
 ```
 
-<!-- # Goals: -->
 
-<!-- # - Packages -->
-
-<!-- # - Data -->
 
 ## Packages
 
-```{r, include=FALSE}
-source("utils.R")
-source("packages.R")
-library(DT)
-```
+This lecture relies on a small, focused toolkit organized by role. For data wrangling and visualization, we use the `tidyverse` to cover the essentials, while `timetk` streamlines time-aware feature engineering, visualization, and preprocessing.  
 
-### Data Wrangling & Viz
+We organize modeling work using `tidymodels`, which brings together workflows, `parsnip`, `tune`, `dials`, `recipes`, `rsample`, and `yardstick` for a consistent interface to model specification, tuning, resampling, preprocessing, and evaluation. For time series specifically, `modeltime` extends `tidymodels` with forecasting workflows, and its companions add backtesting (`modeltime.resample`), ensembling (`modeltime.ensemble`), and AutoML integration (`modeltime.h2o`).
 
-```{r, eval=FALSE}
-library(tidyverse)    # Meta - dplyr, ggplot2, purrr, tidyr, stringr, forcats
-library(lubridate)    # date and time
-library(timetk)       # Time series data wrangling, visualization and preprocessing
-library(DataExplorer) # Data Viz
-library(fs)           # Work with files
-```
+For deep learning we bridge to Python with `reticulate` and access Amazon’s `GluonTS` algorithms through `modeltime.gluonts`, enabling state-of-the-art probabilistic forecasting within the same `tidymodels` workflow.
 
-### Time Series
+Time series fundation models are discusse and Nixtla's TimeGPT is tested via the `timegptr` package. Finally, time series agents are explored using `TimeCopilot`.  
+
+All the required packages can be installed and loaded using the following code:
 
 ```{r, eval=FALSE}
-library(forecast)     # Auto ARIMA, ETS
-library(prophet)      # FB Prophet
+source("src/R/utils.R")
+
+pkgs <- c(
+  "devtools", "remotes",
+  "tidyverse", 
+  "timetk", 
+  "forecast", "prophet", "smooth", "thief",
+  "glmnet", "earth", "kernlab", "kknn",
+  "randomForest", "ranger", "xgboost", "bonsai", "lightgbm",
+  "Cubist", "rules",
+  "tidymodels", "modeltime", "modeltime.ensemble",
+  "parallel", "doFuture", "tictoc",
+  "reticulate"
+)
+install_and_load(pkgs)
+
+# Install CatBoost from source for Linux
+devtools::install_url(
+  "https://github.com/catboost/catboost/releases/download/v1.0.0/catboost-R-Linux-1.0.0.tgz",
+  INSTALL_opts = c("--no-multiarch", "--no-test-load")
+)
+
+# Install packages from GitHub
+remotes::install_github("business-science/modeltime.gluonts")
+remotes::install_github("business-science/modeltime.h2o")
 ```
 
-### Machine Learning
 
-```{r, eval=FALSE}
-library(glmnet)       # Elastic Net
-library(earth)        # Mars Regression Splines
-library(kernlab)      # Support Vector Machine
-library(knn)          # K-Nearest Neighbors
-library(randomForest) # Random Forest
-library(ranger)       # Random Forest
-library(xgboost)      # Boosted Trees
-library(Cubist)       # Cubist Rule-Based Algorithm
-library(rules)        # Rule-based models (required for Cubist)
-```
 
-### Modeling Frameworks
+## Datasets
 
-```{r, eval=FALSE}
-library(tidymodels)         # Meta - workflows, parsnip, tune, dials, recipes, rsample, yardstick
-library(modeltime)          # tidymodels time series extension
-library(modeltime.resample) # tidymodels time series backtesting extension
-library(modeltime.ensemble) # tidymodels time series ensembling extension
-library(modeltime.h2o)      # tidymodels time series auto-ml with h2o extension
-```
-
-### Deep Learning
-
-```{r, eval=FALSE}
-library(reticulate)         # Python interface
-library(modeltime.gluonts)  # tidymodels interface to Amazon's deep learning algos
-```
-
-## Data
+### Email Subscribers
 
 A company decided to change the selling process of its products converting from a completely physical store approach, to a more digital and modern solution. Hence, it decided to open an online web store that integrates an e-commerce platform, where its "virtual" customers can by all the merchandise.\
 In order to monitor this new business solution, it adopted few well-known data analytics tools.
-
- 
-
-![](../resources/presentation/imgs/tsf_data.png)
-
- 
 
 Google Analytics has been set up on the web store pages to collect data related to page views, sessions and organic searches. This could potentially help the company to understand whether its website is gaining popularity.
 
@@ -96,29 +76,21 @@ Finally, marketing events like discount programs and new product launch are prom
 
 All these data are stored into the company database and can be used to analyze the factors that impacts on the web store sales.
 
-### Google Analytics
-
-Website hourly data related to Page Views, Sessions and Organic Traffic of top 20 pages.
-
 ```{r, echo=FALSE}
-analytics_tbl <- read_rds("../data/analytics_hourly.rds")
-analytics_tbl |> dplyr::slice(1:50) |> DT::datatable()
+email_tbl <- load_data("../../data/email", "email_prep")
+email_tbl |> plot_time_series(ds, y, .smooth = FALSE)
 ```
 
-### Users
 
-Mailchimp dataset of email subscriptions.
+### M4 Competition Hourly
 
-```{r, echo=FALSE}
-email_tbl <- read_rds("../data/email.rds")
-email_tbl |> dplyr::slice(1:50) |> DT::datatable()
-```
+The M4 Competition is a well-known time series forecasting competition organized by Spyros Makridakis. The competition provides a large dataset of time series from various domains, including finance, economics, and demographics. The goal of the competition is to develop accurate forecasting models for these time series.
 
-### Events
+https://www.unic.ac.cy/iff/research/forecasting/m-competitions/m4/  
 
-Sales and Product launch events dataset.
+We will use a sample of the M4 Hourly dataset, which consists of hourly time series data. The dataset contains multiple time series, each identified by a unique ID.  
 
 ```{r, echo=FALSE}
-events_tbl <- read_rds("../data/events.rds")
-events_tbl |> DT::datatable()
+m4_hourly_tbl <- load_data("../../data/m4", "m4_prep_sample")
+m4_hourly_tbl |> plot_time_series(ds, y, .facet_vars = unique_id, .facet_ncol = 2, .smooth = FALSE)
 ```

@@ -1,7 +1,8 @@
 # Modern Time Series Forecasting with R ----
-
-# Lecture Extra: Anomaly Detection ----------------------------------------
 # Marco Zanotti
+
+# Lecture E.3: Anomaly Detection ----------------------------------------
+
 
 # Goals:
 # - Some anomaly detection algorithms
@@ -11,30 +12,18 @@
 
 # Packages ----------------------------------------------------------------
 
-source("R/utils.R")
-source("R/packages.R")
+source("src/R/utils.R")
+source("src/R/install.R")
 
-library(forecast)
-library(anomalize)
-library(otsad)
-library(anomaly)
-library(tsoutliers)
-library(stray)
+install_and_load(c("forecast", "anomalize", "otsad", "tsoutliers", "stray"))
 
 
 
 # Data --------------------------------------------------------------------
 
-email_tbl <- read_rds("data/email.rds")
+email_tbl <- load_data("data/email", "email_prep", ext = ".parquet")
 
-
-# Pre-processing Data
-email_tbl <- email_tbl |>
-  summarise_by_time(ds, .by = "day", y = n()) |>
-  pad_by_time(.pad_value = 0)
-
-email_tbl |>
-  plot_time_series(ds, log1p(y), .smooth = FALSE)
+email_tbl |> plot_time_series(ds, log1p(y), .smooth = FALSE)
 
 data_prep_tbl <- email_tbl |>
   # pre-processing
@@ -42,27 +31,22 @@ data_prep_tbl <- email_tbl |>
   mutate(y = standardize_vec(y)) |>
   # fix missing values at beginning of series
   filter_by_time(.start_date = "2018-07-03") |>
-  select(-y)
+  select(ds, y)
 
-data_prep_tbl |>
-  plot_time_series(ds, y)
+data_prep_tbl |> plot_time_series(ds, y)
 
 
 
 # Anomaly detection -------------------------------------------------------
 
-data_prep_tbl |>
-  tk_anomaly_diagnostics(.date_var = ds, .value = y)
-
-data_prep_tbl |>
-  plot_anomaly_diagnostics(ds, y)
-
+data_prep_tbl |> tk_anomaly_diagnostics(.date_var = ds, .value = y)
+data_prep_tbl |> plot_anomaly_diagnostics(ds, y)
 
 # Functions
 anomaly_detection <- function(
     data,
     dates,
-    methods = c("forecast", "anomalize", "stray", "otsad", "anomaly"),
+    methods = c("forecast", "anomalize", "stray", "otsad"),
     score = TRUE,
     methods_ranking = NULL
 ) {
@@ -74,16 +58,15 @@ anomaly_detection <- function(
   # 3) add the method sub name to full_methods_names
   # 3) apply the method based on if-else conditionals
   data_tbl <- dplyr::tibble("datetime" = dates, "value" = data)
-  n_tot_methods <- 10
+  n_tot_methods <- 8
   available_methods <- c(
     "forecast", "anomalize", "tsoutliers", "otsad",
-    "otsad_knn", "anomaly", "stray"
+    "otsad_knn", "stray"
   )
   full_methods_names <- c(
     "forecast", "anomalize", "tsoutliers",
     "otsad_cpp", "otsad_cpsd", "otsad_cpts",
     "otsad_knn",
-    "anomaly_capa", "anomaly_scapa",
     "stray"
   )
 
@@ -154,19 +137,6 @@ anomaly_detection <- function(
     res_list[["otsad_knn"]] <- NULL
   }
 
-  # anomaly
-  if ("anomaly" %in% apply_methods) {
-    logging::loginfo("Detecting anomalies through method anomaly...")
-    out <- anomaly::point_anomalies(anomaly::capa.uv(data, transform = scale)) # base scale function as transform to avoid NaN problems
-    res_list[["anomaly_capa"]][out[out$strength > 0, "location"]] <- 1
-    # SCAPA
-    out <- anomaly::point_anomalies(anomaly::scapa.uv(data, transform = scale)) # base scale function as transform to avoid NaN problems
-    res_list[["anomaly_capa"]][out[out$strength > 0, "location"]] <- 1
-  } else {
-    res_list[["anomaly_capa"]] <- NULL # CAPA
-    res_list[["anomaly_scapa"]] <- NULL # SCAPA
-  }
-
   # stray
   if ("stray" %in% apply_methods) {
     logging::loginfo("Detecting anomalies through method stray...")
@@ -182,9 +152,7 @@ anomaly_detection <- function(
     res_list[["stray"]] <- NULL
   }
 
-
   res_df <- dplyr::bind_cols(res_list)
-
 
   if (score) {
 
@@ -204,10 +172,7 @@ anomaly_detection <- function(
   }
 
   res_df <- dplyr::bind_cols(data_tbl, res_df)
-
-
   return(res_df)
-
 
 }
 
@@ -224,20 +189,12 @@ anomaly_score <- function(anomaly_data, weights = NULL) {
 
 }
 
-
-# Test functions
-# data = data_prep_tbl$y
-# dates = data_prep_tbl$ds
-
 res_df <- anomaly_detection(
   data = data_prep_tbl$y,
   dates = data_prep_tbl$ds
 )
-
 res_df
-
-res_df |>
-  plot_time_series(.date_var = datetime, .value = score)
+res_df |> plot_time_series(.date_var = datetime, .value = score)
 res_df |>
   ggplot(aes(x = datetime, y = value, col = score)) +
   geom_line()
