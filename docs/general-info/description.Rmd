@@ -56,6 +56,6 @@ data scientists, analysts, and professionals interested in enhancing their
 skills in time series forecasting.
 
 For more information about the course have look at the 
-[Programme](https://marcozanotti.github.io/modern-tsf-r/docs/general-info/syllabus.html) 
+[Programme](https://marcozanotti.github.io/modern-tsf-r/docs/general-info/programme.html) 
 or contact me at
 [zanottimarco17@gmail.com](mailto:zanottimarco17@gmail.com){.email}. 

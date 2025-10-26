@@ -36,4 +36,4 @@ The course is structured in three main modules.
 
 Each lecture includes both theoretical concepts and practical applications using R programming language. The course is designed for students, researchers, data scientists, analysts, and professionals interested in enhancing their skills in time series forecasting.
 
-For more information about the course have look at the [Programme](https://marcozanotti.github.io/modern-tsf-r/docs/general-info/syllabus.html) or contact me at [zanottimarco17\@gmail.com](mailto:zanottimarco17@gmail.com){.email}.
+For more information about the course have look at the [Programme](https://marcozanotti.github.io/modern-tsf-r/docs/general-info/programme.html) or contact me at [zanottimarco17\@gmail.com](mailto:zanottimarco17@gmail.com).
