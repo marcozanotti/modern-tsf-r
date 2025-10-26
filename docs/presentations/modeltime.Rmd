@@ -1,0 +1,127 @@
+---
+title: "Modern Time Series Forecasting with R"
+subtitle: ""
+author: "Marco Zanotti"
+institute: ""
+date: ""
+output:
+  xaringan::moon_reader:
+    css: ["default", "css/custom.css"]
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+    seal: false
+---
+
+class: inverse, center, middle 
+background-color: black
+
+# Modern Time Series Forecasting with R
+
+### Marco Zanotti
+
+---
+class: separator, right, middle
+background-color: black
+
+# Modeltime
+<!-- Separator -->
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img16.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img17.png")
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img18.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img19.png")
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img20.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img21.png")
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img22.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img23.png")
+background-size: contain
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img25.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img26.png")
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img27.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img28.png")
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img29.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle
+background-image: url("imgs/img30.png")
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-image: url("imgs/img24.png") 
+background-size: contain 
+background-color: black
+
+---
+class: inverse, center, middle 
+background-color: black
+
+# Thank you!
+<!-- Separator -->

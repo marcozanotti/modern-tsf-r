@@ -1,0 +1,206 @@
+---
+title: "Mordern Time Series Forecasting with R: Programme"
+author: "Marco Zanotti"
+date: ""
+output:
+  # pdf_document: default
+  rmdformats::downcute:
+    highlight: tango
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Module 0
+
+## Lecture 0: Introduction
+
+- Overview  
+- Software Requirements  
+- Data  
+
+
+
+# Module I: From Statistical Methods to Machine Learning  
+
+## Lecture 1.1: Manipulations, Transformations & Visualizations
+
+**Manipulations**:  
+- summarizing by time  
+- padding by time  
+- filtering by time  
+- mutating by time  
+- joining by time  
+
+**Transformations**:   
+- variance reduction  
+- range reduction  
+- smoothing  
+- rolling averages  
+- missing values imputation  
+- anomaly detection and cleaning  
+- lags and differencing  
+- Fourier transforms  
+- confined intervals  
+
+**Visualizations**:  
+- time series  
+- autocorrelations  
+- cross-correlations  
+- smoothing  
+- seasonality  
+- time series decomposition  
+- anomaly detection  
+- time series regressions  
+
+
+## Lecture 1.2: Feature Engineering
+
+**Feature Engineering**:  
+- time-based features  
+- trend-based features  
+- seasonal features  
+- interaction features  
+- rolling average features  
+- lag features  
+- Fourier features  
+- event data features  
+- external features  
+
+**Tidymodel**:  
+- recipes  
+- workflows  
+
+
+## Lecture 1.3: Modeltime
+
+**Modeltime**:  
+- package framework  
+- algorithm specifications  
+- workflows  
+- calibration  
+- evaluation  
+- refitting  
+- forecasting  
+
+
+## Lecture 1.4: Statistical Models
+
+**Forecasting Methods**:  
+- Naive / Seasonal Naive  
+- Window Functions  
+- S-ARIMA-X  
+- Exponential Smoothing  
+- TBATS  
+- STLM (Decomposition models)  
+- Facebook's Prophet 
+
+
+## Lecture 1.5: Machine Learning Models
+
+**Forecasting Methods**:  
+- Linear Regression  
+- Elastic Net  
+- MARS  
+- SVM  
+- KNN  
+- Random Forest  
+- Boosting  
+- Cubist  
+- Neural Network  
+
+
+
+# Module II: Advanced Forecasting Methods  
+
+## Lecture 2.1: Deep Learning Models
+
+**Forecasting Methods**:    
+- GluonTS Deep AR   
+- GluonTS NBEATS    
+- GluonTS GP Forecaster  
+- GluonTS Deep State  
+- Torch Deep AR   
+
+
+## Lecture 2.2: Automatic Machine Learning
+
+**Forecasting Methods**:  
+- H2O  
+
+
+## Lecture 2.3: Hyperparameter Tuning
+
+**Methods**:    
+- Sequential  
+- Non-Sequential  
+
+**Cross Validation**:  
+- Time Series Cross Validation  
+- V-Fold Cross Validation  
+- Grid Searches  
+
+
+## Lecture 2.4: Ensemble Learning Methods
+
+**Forecasting Methods**:  
+- Simple Averaging Ensemble  
+- Weight Averaging Ensemble  
+- Stacking and Metalearning  
+- Multi-level Ensemble  
+
+
+## Lecture 2.5: Recursive Forecasting
+
+**Recursivity**:  
+- single time series recursive modelling  
+- multiple time series recursive modelling
+
+
+
+# Module III: The Frontier of Forecasting  
+
+## Lecture 3.1: Global Forecasting Method
+
+**Forecasting Methods**:  
+- Nested Forecasting  
+- Global Modelling  
+
+
+## Lecture 3.2: Global Recursive Forecasting 
+
+**Recursivity**:  
+- Global Recursive Modelling  
+
+
+## Lecture 3.3: Foundation Models
+
+**Forecasting Methods**:  
+- Pretrained Models  
+- Few-Shot Learning  
+- Zero-Shot Learning  
+- Nixtla's TimeGPT  
+
+
+## Lecture 3.4: Time Series Agents
+
+**Agents**:  
+- Introduction to Agents  
+- Time Series Forecasting Agents  
+- TimeCopilot  
+
+
+
+# Module Extras
+
+## Advanced Topics & Algorithms
+
+- Mixed Models (ARIMA Boost and Prophet Boost)  
+- Facebook's Neural Prophet  
+- Anomaly Detetction  
+- Clustering  
+
