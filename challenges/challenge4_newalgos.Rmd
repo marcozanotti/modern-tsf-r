@@ -1,0 +1,43 @@
+---
+title: "Challenge 4 - Explore New Forecasting Algorithms"
+author: "Marco Zanotti"
+date: ""
+output: 
+  rmdformats::downcute:
+    highlight: tango
+    toc_depth: 2
+---
+
+## Content
+
+This challenge is about testing previously unseen time series forecasting
+algorithms.  
+
+The purpose of this challenge is to test your ability to use new models 
+for time series forecasting as soon as they become available.  
+
+
+
+## Requirements
+
+You are required to produce a fully reproducible notebook report explaining 
+all the steps to forecast with Bayesian models & GAMs.  
+
+You are free to apply the feature sets you created during Challenge 1.    
+
+References:  
+- [Bayes Models](https://albertoalmuinha.github.io/bayesmodels/)  
+- [GAMs](https://hsbadr.github.io/additive/)  
+- [GAMs method](https://petolau.github.io/Analyzing-double-seasonal-time-series-with-GAM-in-R/)  
+
+
+
+## Data
+
+Challenge dataset contains an hourly time series of the M4 competition.
+
+```{r data, echo=FALSE}
+readr::read_csv("../data/challenges/challenge1.csv", show_col_types = FALSE) |> 
+  timetk::plot_time_series(ds, y, .smooth = FALSE)
+```
+

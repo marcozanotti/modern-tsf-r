@@ -1,0 +1,34 @@
+---
+title: "Challenge 6 - Foundation Models"
+author: "Marco Zanotti"
+date: ""
+output: 
+  rmdformats::downcute:
+    highlight: tango
+    toc_depth: 2
+---
+
+## Content
+
+This challenge is about time series foundation models (Module 3 Lecture 3.3).  
+
+The purpose of this challenge is to test your ability to use different foundation 
+models to forecast temporal data.  
+
+
+
+## Requirements
+
+You are required to produce a fully reproducible notebook report explaining 
+all the steps that takes you towards the forecasting results.  
+
+
+
+## Data
+
+Challenge dataset contains an hourly time series of the M4 competition.
+
+```{r data, echo=FALSE}
+readr::read_csv("../data/challenges/challenge1.csv", show_col_types = FALSE) |> 
+  timetk::plot_time_series(ds, y, .smooth = FALSE)
+```

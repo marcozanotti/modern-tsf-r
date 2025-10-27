@@ -8,17 +8,10 @@ output:
     toc_depth: 2
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
-library(tidyverse)
-library(timetk)
-```
-
 ## Content
 
 This challenge is all about explorative data analysis (EDA) and
-features engineering in time series (Lectures 1 and 2).  
+features engineering in time series (Module 1 Lectures 1.1 and 1.2).  
 
 The purpose of this challenge is to test your ability to effectively understand 
 the dynamics of different time series allowing you to create one or more 
@@ -41,17 +34,10 @@ At least one feature set for each time series has to be produced.
 
 ## Data
 
-Challenge dataset contains:  
-- daily website page views   
-- hourly website organic searches  
-- weekly website sales  
+Challenge dataset contains an hourly time series of the M4 competition.
 
 ```{r data, echo=FALSE}
-data <- read_rds("../data/challenges_dataset.rds")
-data %>% 
-  map(~ select(., 1:2)) %>% 
-  map(~ pivot_longer(., -date, names_to = "series")) %>% 
-  bind_rows() %>% 
-  plot_time_series(.date_var = date, .value = value, .facet_vars = series, .facet_scales = "free")
+readr::read_csv("../data/challenges/challenge1.csv", show_col_types = FALSE) |> 
+  timetk::plot_time_series(ds, y, .smooth = FALSE)
 ```
 

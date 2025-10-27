@@ -204,3 +204,15 @@ knitr::opts_chunk$set(echo = TRUE)
 - Anomaly Detetction  
 - Clustering  
 
+
+
+# Challenges
+
+- [Challenge 0: Jumpstart](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge0_jumpstart.html)
+- [Challenge 1: Feature Engineering](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge1_feateng.html)
+- [Challenge 2: Modeltime](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge2_modeltime.html)
+- [Challenge 3: Testing Forecasting Algorithms](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge3_algos.html)
+- [Challenge 4: Explore New Forecasting Algorithms](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge4_newalgos.html)
+- [Challenge 5: Hyperparameter Tuning](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge5_tuning.html)
+- [Challenge 6: Foundation Models](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge6_foundation.html)
+- [Challenge 7: Forecasting Agents](https://marcozanotti.github.io/modern-tsf-r/challenges/challenge7_agents.html)

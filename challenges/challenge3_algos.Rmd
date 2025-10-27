@@ -1,0 +1,37 @@
+---
+title: "Challenge 3 - Testing Forecasting Algorithms"
+author: "Marco Zanotti"
+date: ""
+output: 
+  rmdformats::downcute:
+    highlight: tango
+    toc_depth: 2
+---
+
+## Content
+
+This challenge is about testing time series forecasting algorithms of Module 1 and 2 
+(Lectures 1.4, 1.5, 2.1, 2.2, 2.4).  
+
+The purpose of this challenge is to test your ability to use many models
+to forecast different time series and to evaluate them.  
+
+
+
+## Requirements
+
+You are required to produce a fully reproducible notebook report explaining 
+all the steps to forecast with Time Series, Machine Learning and Ensemble models.  
+
+You are free to apply the feature sets you created during Challenge 1.  
+
+
+
+## Data
+
+Challenge dataset contains an hourly time series of the M4 competition.
+
+```{r data, echo=FALSE}
+readr::read_csv("../data/challenges/challenge1.csv", show_col_types = FALSE) |> 
+  timetk::plot_time_series(ds, y, .smooth = FALSE)
+```

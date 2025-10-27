@@ -8,13 +8,6 @@ output:
     toc_depth: 2
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
-library(tidyverse)
-library(timetk)
-```
-
 ## Content
 
 This challenge is about time series forecasting.  
@@ -34,18 +27,15 @@ evaluate on the test set.
 
 You have to evaluate your methods with RMSE.   
 
-You have to produce the results in 30 minutes.  
-
 You are free to apply any method and software you like (even MS Excel).  
 
 
 
 ## Data
 
-Challenge dataset contains:  
-- daily time series of website subscribers volume (in log)
+Challenge dataset contains daily time series of email subscribers volume (in log).
 
 ```{r data, echo=FALSE, message=FALSE}
-data <- read_csv("../data/challenge0_dataset.csv")
-plot_time_series(data, .date_var = date, .value = value, .color_var = type, .smooth = FALSE)
+readr::read_csv("../data/challenges/challenge0.csv", show_col_types = FALSE) |> 
+  timetk::plot_time_series(ds, y, .color_var = type, .smooth = FALSE)
 ```
