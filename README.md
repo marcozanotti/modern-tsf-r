@@ -17,21 +17,21 @@ This course guides students, researchers, data scientists, and practitioners thr
 The course is structured in three main modules.
 
 -   Module I — From Statistical Methods to Machine Learning (Lectures 1.1–1.5)
-    -   Manipulations, Transformations & Visualizations\
-    -   Feature Engineering\
-    -   Modeltime Framework\
-    -   Statistical Models\
+    -   Manipulations, Transformations & Visualizations
+    -   Feature Engineering
+    -   Modeltime Framework
+    -   Statistical Models
     -   Machine Learning Models
 -   Module II — Advanced Forecasting Methods (Lectures 2.1–2.5)
-    -   Deep Learning Models\
-    -   Automatic Machine Learning\
-    -   Hyperparameter Tuning\
-    -   Ensemble Learning Methods\
+    -   Deep Learning Models
+    -   Automatic Machine Learning
+    -   Hyperparameter Tuning
+    -   Ensemble Learning Methods
     -   Recursive Forecasting
 -   Module III — The Frontier of Forecasting (Lectures 3.1–3.4)
-    -   Global Forecasting Approach\
-    -   Global Recursive Forecasting\
-    -   Foundation Models\
+    -   Global Forecasting Approach
+    -   Global Recursive Forecasting
+    -   Foundation Models
     -   Time Series Agents
 
 Each lecture includes both theoretical concepts and practical applications using R programming language. The course is designed for students, researchers, data scientists, analysts, and professionals interested in enhancing their skills in time series forecasting.
