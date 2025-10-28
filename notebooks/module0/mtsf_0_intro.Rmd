@@ -7,19 +7,17 @@ date: ""
 output: 
   rmdformats::downcute:
     highlight: tango
-    toc_depth: 3
+    toc_depth: 2
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 source("../../src/R/utils.R")
-library(tidyverse)
-library(timetk)
 ```
 
 
 
-## Packages
+# Packages
 
 This lecture relies on a small, focused toolkit organized by role. For data wrangling and visualization, we use the `tidyverse` to cover the essentials, while `timetk` streamlines time-aware feature engineering, visualization, and preprocessing.  
 
@@ -61,9 +59,9 @@ remotes::install_github("business-science/modeltime.h2o")
 
 
 
-## Datasets
+# Datasets
 
-### Email Subscribers
+## Email Subscribers
 
 A company decided to change the selling process of its products converting from a completely physical store approach, to a more digital and modern solution. Hence, it decided to open an online web store that integrates an e-commerce platform, where its "virtual" customers can by all the merchandise.\
 In order to monitor this new business solution, it adopted few well-known data analytics tools.
@@ -77,12 +75,12 @@ Finally, marketing events like discount programs and new product launch are prom
 All these data are stored into the company database and can be used to analyze the factors that impacts on the web store sales.
 
 ```{r, echo=FALSE}
-email_tbl <- load_data("../../data/email", "email_prep")
-email_tbl |> plot_time_series(ds, y, .smooth = FALSE)
+load_data("../../data/email", "email_prep") |> 
+  timetk::plot_time_series(ds, y, .smooth = FALSE)
 ```
 
 
-### M4 Competition Hourly
+## M4 Competition Hourly
 
 The M4 Competition is a well-known time series forecasting competition organized by Spyros Makridakis. The competition provides a large dataset of time series from various domains, including finance, economics, and demographics. The goal of the competition is to develop accurate forecasting models for these time series.
 
@@ -91,6 +89,6 @@ https://www.unic.ac.cy/iff/research/forecasting/m-competitions/m4/
 We will use a sample of the M4 Hourly dataset, which consists of hourly time series data. The dataset contains multiple time series, each identified by a unique ID.  
 
 ```{r, echo=FALSE}
-m4_hourly_tbl <- load_data("../../data/m4", "m4_prep_sample")
-m4_hourly_tbl |> plot_time_series(ds, y, .facet_vars = unique_id, .facet_ncol = 2, .smooth = FALSE)
+load_data("../../data/m4", "m4_prep_sample") |> 
+  timetk::plot_time_series(ds, y, .facet_vars = unique_id, .facet_ncol = 2, .smooth = FALSE)
 ```
