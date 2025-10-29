@@ -1,5 +1,5 @@
 ---
-title: "Modern Time Series Forecasting with R"
+title: "Modern Time Series Forecasting with Python"
 subtitle: ""
 author: "Marco Zanotti"
 institute: ""
@@ -18,7 +18,7 @@ output:
 class: inverse, center, middle 
 background-color: black
 
-# Modern Time Series Forecasting with R
+# Modern Time Series Forecasting with Python
 
 ### Marco Zanotti
 
@@ -26,7 +26,7 @@ background-color: black
 class: separator, right, middle
 background-color: black
 
-# Modeltime
+# Nixtla
 <!-- Separator -->
 
 ---
@@ -37,79 +37,43 @@ background-color: black
 
 ---
 class: inverse, center, middle 
-background-image: url("imgs/mod2.png") 
+background-image: url("imgs/nixtla1.png") 
 background-size: contain 
 background-color: black
 
 ---
 class: inverse, center, middle
-background-image: url("imgs/mod3.png")
-background-size: contain 
-background-color: black
-
----
-class: inverse, center, middle 
-background-image: url("imgs/mod4.png") 
+background-image: url("imgs/nixtla2.png")
 background-size: contain 
 background-color: black
 
 ---
 class: inverse, center, middle
-background-image: url("imgs/mod5.png")
-background-size: contain 
-background-color: black
-
----
-class: inverse, center, middle 
-background-image: url("imgs/mod6.png") 
+background-image: url("imgs/nixtla3.png")
 background-size: contain 
 background-color: black
 
 ---
 class: inverse, center, middle
-background-image: url("imgs/mod7.png")
-background-size: contain
-background-color: black
-
----
-class: inverse, center, middle 
-background-image: url("imgs/mod8.png") 
+background-image: url("imgs/nixtla4.png")
 background-size: contain 
 background-color: black
 
 ---
 class: inverse, center, middle
-background-image: url("imgs/mod9.png")
-background-size: contain 
-background-color: black
-
----
-class: inverse, center, middle 
-background-image: url("imgs/mod10.png") 
+background-image: url("imgs/nixtla5.png")
 background-size: contain 
 background-color: black
 
 ---
 class: inverse, center, middle
-background-image: url("imgs/mod11.png")
-background-size: contain 
-background-color: black
-
----
-class: inverse, center, middle 
-background-image: url("imgs/mod12.png") 
+background-image: url("imgs/nixtla6.png")
 background-size: contain 
 background-color: black
 
 ---
 class: inverse, center, middle
-background-image: url("imgs/mod13.png")
-background-size: contain 
-background-color: black
-
----
-class: inverse, center, middle 
-background-image: url("imgs/mod14.png") 
+background-image: url("imgs/nixtla7.png")
 background-size: contain 
 background-color: black
 
