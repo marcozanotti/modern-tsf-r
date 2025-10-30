@@ -19,7 +19,7 @@ source("../../src/R/utils.R")
 
 # Packages
 
-This lecture relies on a small, focused toolkit organized by role. For data wrangling and visualization, we use the `tidyverse` to cover the essentials, while `timetk` streamlines time-aware feature engineering, visualization, and preprocessing.  
+The course focuses on R toolkit organized by role. For data wrangling and visualization, we use the `tidyverse` to cover the essentials, while `timetk` streamlines time-aware feature engineering, visualization, and preprocessing.  
 
 We organize modeling work using `tidymodels`, which brings together workflows, `parsnip`, `tune`, `dials`, `recipes`, `rsample`, and `yardstick` for a consistent interface to model specification, tuning, resampling, preprocessing, and evaluation. For time series specifically, `modeltime` extends `tidymodels` with forecasting workflows, and its companions add backtesting (`modeltime.resample`), ensembling (`modeltime.ensemble`), and AutoML integration (`modeltime.h2o`).
 
