@@ -92,3 +92,17 @@ We will use a sample of the M4 Hourly dataset, which consists of hourly time ser
 load_data("../../data/m4", "m4_prep_sample") |> 
   timetk::plot_time_series(ds, y, .facet_vars = unique_id, .facet_ncol = 2, .smooth = FALSE)
 ```
+
+
+## Electricity Price
+
+The dataset contains data from five electricity markets, each with unique price dynamics, including varying frequencies and occurrences of negative prices, zeros, and price spikes. Since electricity prices depend on exogenous factors, each dataset includes two additional time series: day-ahead forecasts of two significant exogenous factors specific to each market.
+
+This dataset includes hourly prices (`y`), day-ahead forecasts of load (`Exogenous1`), and wind generation (`Exogenous2`). It also includes one-hot encoding to indicate the day of the week. For example: Monday (`day_0 = 1`), Tuesday (`day_1 = 1`), and so on.
+
+For simplicity, we focus on the Nord Pool electricity market (NP), which represents the Nordic countries’ exchange.
+
+```{r, echo=FALSE}
+load_data("../../data/electricity", "electricity_short", ".csv") |> 
+  timetk::plot_time_series(ds, y, .smooth = FALSE)
+```
